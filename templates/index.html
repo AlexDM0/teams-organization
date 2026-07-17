@@ -109,6 +109,24 @@
             background: rgba(15, 23, 42, 0.4);
             padding: 8px;
             border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .node-details:hover {
+            background: rgba(15, 23, 42, 0.7);
+        }
+
+        .node-detail-more {
+            font-size: 10px;
+            color: #818cf8;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-top: 2px;
         }
         
         .node-detail-item {
@@ -247,12 +265,231 @@
             box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
             background: #203554;
         }
+
+        /* Settings cogwheel */
+        .settings-container {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 100;
+        }
+        .settings-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            color: #cbd5e1;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+        .settings-btn:hover {
+            border-color: #6366f1;
+            transform: rotate(30deg);
+        }
+        .settings-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 260px;
+            background: rgba(30, 41, 59, 0.97);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+            padding: 14px;
+            display: none;
+            box-sizing: border-box;
+        }
+        .settings-panel.active {
+            display: block;
+        }
+        .settings-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 2px;
+        }
+        .settings-hint {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+        .settings-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 8px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #cbd5e1;
+            cursor: pointer;
+            transition: background 0.15s;
+            user-select: none;
+        }
+        .settings-option:hover {
+            background: rgba(99, 102, 241, 0.15);
+        }
+        .settings-option input {
+            accent-color: #6366f1;
+            width: 15px;
+            height: 15px;
+            cursor: pointer;
+        }
+        .settings-option.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .settings-option.disabled:hover {
+            background: transparent;
+        }
+        .settings-option-icon {
+            opacity: 0.75;
+        }
+
+        /* Contact overlay */
+        .contact-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.72);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .contact-overlay.active {
+            display: flex;
+        }
+        .contact-modal {
+            width: 420px;
+            max-width: calc(100vw - 48px);
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+            padding: 24px;
+            position: relative;
+            box-sizing: border-box;
+        }
+        .contact-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(148, 163, 184, 0.15);
+            color: #cbd5e1;
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .contact-close:hover {
+            background: rgba(148, 163, 184, 0.3);
+        }
+        .contact-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .contact-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .contact-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+        .contact-position {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+        .contact-body {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .contact-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 4px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            font-size: 14px;
+            color: #e2e8f0;
+        }
+        .contact-row-icon {
+            width: 20px;
+            text-align: center;
+            opacity: 0.8;
+        }
+        .contact-row-label {
+            width: 110px;
+            color: #94a3b8;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            flex-shrink: 0;
+        }
+        .contact-row-value {
+            word-break: break-word;
+        }
+        .contact-empty {
+            color: #94a3b8;
+            font-size: 13px;
+            padding: 8px 4px;
+        }
     </style>
 </head>
 <body>
+    <div class="settings-container">
+        <button id="settings-btn" class="settings-btn" title="Choose card fields">⚙️</button>
+        <div id="settings-panel" class="settings-panel">
+            <div class="settings-title">Card fields</div>
+            <div class="settings-hint">Pick up to 3 fields to show on each card.</div>
+            <div id="settings-options"></div>
+        </div>
+    </div>
     <div class="search-container">
         <input type="text" id="search-input" class="search-input" placeholder="Search employees or roles..." autocomplete="off">
         <div id="search-results" class="search-results"></div>
+    </div>
+    <div id="contact-overlay" class="contact-overlay">
+        <div class="contact-modal">
+            <button class="contact-close" id="contact-close" title="Close">&times;</button>
+            <div class="contact-header">
+                <div id="contact-avatar" class="contact-avatar"></div>
+                <div>
+                    <div id="contact-name" class="contact-name"></div>
+                    <div id="contact-position" class="contact-position"></div>
+                </div>
+            </div>
+            <div id="contact-body" class="contact-body"></div>
+        </div>
     </div>
     <div id="loading" class="loading">
         <div class="spinner"></div>
@@ -261,13 +498,59 @@
     <div id="chart-container"></div>
 
     <script>
-        fetch('org_tree.json')
-            .then(res => {
-                if (!res.ok) throw new Error("Could not load org_tree.json");
-                return res.json();
-            })
-            .then(data => {
+        (function () {
+            const embedded = document.getElementById('org-data-embedded');
+            const embeddedPhotos = document.getElementById('org-photos-embedded');
+            let dataPromise;
+            if (embedded) {
+                dataPromise = Promise.resolve().then(() => ({
+                    tree: JSON.parse(embedded.textContent),
+                    photos: embeddedPhotos ? JSON.parse(embeddedPhotos.textContent) : {}
+                }));
+            } else {
+                dataPromise = Promise.all([
+                    fetch('org_tree.json').then(res => {
+                        if (!res.ok) throw new Error("Could not load org_tree.json");
+                        return res.json();
+                    }),
+                    fetch('photos.json').then(res => res.ok ? res.json() : {}).catch(() => ({}))
+                ]).then(([tree, photos]) => ({ tree, photos }));
+            }
+            dataPromise
+            .then(({ tree, photos }) => {
+                const data = tree;
                 document.getElementById('loading').style.display = 'none';
+
+                // Catalog of profile fields that can be shown on cards / in the overlay.
+                const FIELD_DEFS = [
+                    { key: 'email', label: 'Email', icon: '✉️', get: n => n.email },
+                    { key: 'role', label: 'Department', icon: '🏢', get: n => n.role },
+                    { key: 'mobilePhone', label: 'Mobile', icon: '📱', get: n => n.mobilePhone },
+                    { key: 'businessPhone', label: 'Business phone', icon: '☎️', get: n => n.businessPhone },
+                    { key: 'officeLocation', label: 'Office', icon: '🏬', get: n => n.officeLocation },
+                    { key: 'location', label: 'Location', icon: '📍', get: n => [n.city, n.state, n.country].filter(Boolean).join(', ') },
+                    { key: 'companyName', label: 'Company', icon: '🏛️', get: n => n.companyName },
+                    { key: 'employeeId', label: 'Employee ID', icon: '🆔', get: n => n.employeeId },
+                ];
+                const MAX_CARD_FIELDS = 3;
+                const FIELD_BY_KEY = Object.fromEntries(FIELD_DEFS.map(f => [f.key, f]));
+
+                // Which fields show on the cards (persisted, capped at MAX_CARD_FIELDS).
+                function loadCardFields() {
+                    try {
+                        const saved = JSON.parse(localStorage.getItem('teamsOrg.cardFields'));
+                        if (Array.isArray(saved)) {
+                            const valid = saved.filter(k => FIELD_BY_KEY[k]).slice(0, MAX_CARD_FIELDS);
+                            if (valid.length) return valid;
+                        }
+                    } catch (e) { /* ignore */ }
+                    return ['email', 'role', 'mobilePhone'];
+                }
+                let cardFields = loadCardFields();
+
+                const escapeHtml = (str) => String(str == null ? '' : str)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                 
                 let flatData = [];
                 function flattenTree(nodes, parentId = null) {
@@ -279,7 +562,15 @@
                             position: node.position,
                             email: node.email,
                             role: node.role,
-                            imageUrl: node.imageUrl,
+                            mobilePhone: node.mobilePhone || "",
+                            businessPhone: node.businessPhone || "",
+                            officeLocation: node.officeLocation || "",
+                            city: node.city || "",
+                            state: node.state || "",
+                            country: node.country || "",
+                            companyName: node.companyName || "",
+                            employeeId: node.employeeId || "",
+                            imageUrl: photos[node.id] || node.imageUrl || null,
                             _directSubordinates: node.children ? node.children.length : 0
                         });
                         if (node.children && node.children.length > 0) {
@@ -400,23 +691,118 @@
                                     ${imageStr}
                                     <div class="node-name" title="${node.name}">${node.name}</div>
                                     <div class="node-position" title="${node.position}">${node.position || ''}</div>
-                                    <div class="node-details">
-                                        ${node.email ? `
-                                        <div class="node-detail-item" title="${node.email}">
-                                            <span class="node-detail-icon">✉️</span> ${node.email}
-                                        </div>` : ''}
-                                        ${node.role ? `
-                                        <div class="node-detail-item" title="${node.role}">
-                                            <span class="node-detail-icon">🏢</span> ${node.role}
-                                        </div>` : ''}
+                                    <div class="node-details" onclick="event.stopPropagation(); window.showContact('${node.id}')" title="Click for full contact info">
+                                        ${cardFields
+                                            .map(key => FIELD_BY_KEY[key])
+                                            .filter(Boolean)
+                                            .map(f => ({ icon: f.icon, value: f.get(node) }))
+                                            .filter(d => d.value)
+                                            .map(d => `
+                                        <div class="node-detail-item" title="${escapeHtml(d.value)}">
+                                            <span class="node-detail-icon">${d.icon}</span> ${escapeHtml(d.value)}
+                                        </div>`).join('')}
+                                        <div class="node-detail-more">👤 View contact</div>
                                     </div>
                                 </div>
                             </div>
                         `;
                     })
                     .render();
-                    
-                // Initialize Fuse.js for search
+
+                // ---- Contact overlay ----
+                const overlay = document.getElementById('contact-overlay');
+                window.showContact = function (id) {
+                    const n = flatData.find(d => d.id === id);
+                    if (!n) return;
+
+                    const avatar = document.getElementById('contact-avatar');
+                    if (n.imageUrl) {
+                        avatar.innerHTML = '';
+                        avatar.style.backgroundImage = `url("${n.imageUrl}")`;
+                        avatar.style.backgroundSize = 'cover';
+                        avatar.style.backgroundPosition = 'center';
+                    } else {
+                        avatar.style.backgroundImage = 'none';
+                        avatar.textContent = (n.name || '?').charAt(0);
+                    }
+
+                    document.getElementById('contact-name').textContent = n.name || '';
+                    document.getElementById('contact-position').textContent = n.position || '';
+
+                    const rows = FIELD_DEFS
+                        .map(f => ({ label: f.label, icon: f.icon, value: f.get(n) }))
+                        .filter(r => r.value)
+                        .map(r => `
+                            <div class="contact-row">
+                                <span class="contact-row-icon">${r.icon}</span>
+                                <span class="contact-row-label">${escapeHtml(r.label)}</span>
+                                <span class="contact-row-value">${escapeHtml(r.value)}</span>
+                            </div>`).join('');
+                    document.getElementById('contact-body').innerHTML =
+                        rows || '<div class="contact-empty">No additional contact information available.</div>';
+
+                    overlay.classList.add('active');
+                };
+                window.hideContact = function () {
+                    overlay.classList.remove('active');
+                };
+                document.getElementById('contact-close').addEventListener('click', window.hideContact);
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) window.hideContact();
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') window.hideContact();
+                });
+
+                // ---- Settings cogwheel: choose up to 3 card fields ----
+                const settingsBtn = document.getElementById('settings-btn');
+                const settingsPanel = document.getElementById('settings-panel');
+                const settingsOptions = document.getElementById('settings-options');
+
+                function renderSettingsOptions() {
+                    const atMax = cardFields.length >= MAX_CARD_FIELDS;
+                    settingsOptions.innerHTML = FIELD_DEFS.map(f => {
+                        const checked = cardFields.includes(f.key);
+                        const disabled = !checked && atMax;
+                        return `
+                            <label class="settings-option ${disabled ? 'disabled' : ''}">
+                                <input type="checkbox" value="${f.key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+                                <span class="settings-option-icon">${f.icon}</span>
+                                <span>${escapeHtml(f.label)}</span>
+                            </label>`;
+                    }).join('');
+                }
+
+                function applyCardFields() {
+                    localStorage.setItem('teamsOrg.cardFields', JSON.stringify(cardFields));
+                    chart.render();
+                }
+
+                settingsOptions.addEventListener('change', (e) => {
+                    const cb = e.target;
+                    if (!cb || cb.type !== 'checkbox') return;
+                    if (cb.checked) {
+                        if (!cardFields.includes(cb.value) && cardFields.length < MAX_CARD_FIELDS) {
+                            cardFields.push(cb.value);
+                        }
+                    } else {
+                        cardFields = cardFields.filter(k => k !== cb.value);
+                    }
+                    renderSettingsOptions();
+                    applyCardFields();
+                });
+
+                settingsBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    settingsPanel.classList.toggle('active');
+                });
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.settings-container')) {
+                        settingsPanel.classList.remove('active');
+                    }
+                });
+                renderSettingsOptions();
+
                 const fuse = new Fuse(flatData, {
                     keys: ['name', 'role', 'position', 'email'],
                     threshold: 0.3,
@@ -527,13 +913,14 @@
                         <p style="opacity: 0.9;">${err.message}</p>
                         <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
                         <p style="font-size: 13px; color: #94a3b8; text-align: left; line-height: 1.5; margin-bottom: 0;">
-                            1. Did you run the <code>extract.ts</code> script to generate <strong>org_tree.json</strong>?<br>
+                            1. Did you run <code>teams-org extract</code> to generate <strong>org_tree.json</strong>?<br>
                             2. Are you serving this file via a local web server?<br>
-                            <span style="color: #6366f1; font-family: monospace; display: block; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 6px;">bunx serve</span>
+                            <span style="color: #6366f1; font-family: monospace; display: block; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 6px;">teams-org extract</span>
                         </p>
                     </div>
                 `;
             });
+        })();
     </script>
 </body>
 </html>

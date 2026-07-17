@@ -3,8 +3,12 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "teams-org": "./bin/cli.ts"
+  },
   "scripts": {
-    "start": "bun run extract.ts",
+    "extract": "bun run bin/cli.ts extract",
+    "start": "bun run bin/cli.ts extract",
     "serve": "bunx serve"
   },
   "devDependencies": {
@@ -15,7 +19,8 @@
   },
   "dependencies": {
     "@azure/msal-node": "^5.4.1",
+    "@inquirer/prompts": "^8.5.2",
     "@microsoft/microsoft-graph-client": "^3.0.7",
-    "dotenv": "^17.4.2"
+    "commander": "^15.0.0"
   }
 }
