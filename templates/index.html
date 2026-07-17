@@ -353,41 +353,61 @@
             font-size: 15px;
             line-height: 1;
         }
-        /* Segmented control to switch the org-chart growth direction. */
-        .direction-toggle {
-            display: flex;
-            height: 44px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,0.1);
-            background: rgba(30, 41, 59, 0.8);
+        /* Direction picker: a button that opens a panel of layout choices. */
+        .direction-container {
+            position: relative;
+        }
+        .direction-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 240px;
+            background: rgba(30, 41, 59, 0.97);
             backdrop-filter: blur(10px);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+            padding: 14px;
+            display: none;
+            box-sizing: border-box;
         }
-        .direction-btn {
-            width: 40px;
-            border: none;
-            border-right: 1px solid rgba(255,255,255,0.08);
-            background: transparent;
-            color: #94a3b8;
-            font-size: 16px;
-            line-height: 1;
-            cursor: pointer;
+        .direction-panel.active {
+            display: block;
+        }
+        .direction-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .direction-option {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            transition: background 0.15s, color 0.15s;
+            gap: 6px;
+            padding: 12px 8px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(15, 23, 42, 0.7);
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s, color 0.15s;
         }
-        .direction-btn:last-child {
-            border-right: none;
+        .direction-option:hover {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.15);
         }
-        .direction-btn:hover {
-            background: #27364f;
-            color: #e2e8f0;
-        }
-        .direction-btn.active {
-            background: #6366f1;
+        .direction-option.active {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.25);
             color: #ffffff;
+        }
+        .direction-option-icon {
+            font-size: 20px;
+            line-height: 1;
         }
         .settings-btn {
             width: 44px;
@@ -721,6 +741,13 @@
             border-color: #6366f1;
             background: #27364f;
         }
+        /* Custom SVG moon/sun icons — inherit the button's muted colour via
+           currentColor so they stay as understated as the other controls. */
+        .theme-toggle svg {
+            display: block;
+            width: 18px;
+            height: 18px;
+        }
 
         /* -------------------------------------------------------------------
            Light theme. The dark theme above is the default and is left fully
@@ -765,6 +792,15 @@
             background: #e0f2fe;
             box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.35), 0 0 28px 6px rgba(56, 189, 248, 0.45);
         }
+        /* The report-count bubble's ring is the card surface colour so it reads as
+           tucked into the card — white to match the light-theme cards. Its fill is
+           softened (lighter indigo, gentler shadow) so it doesn't punch out against
+           the lighter palette. */
+        body.light-theme .expand-button {
+            border-color: #ffffff;
+            background: linear-gradient(135deg, #818cf8, #6366f1);
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+        }
         body.light-theme .theme-toggle,
         body.light-theme .collapse-btn,
         body.light-theme .settings-btn {
@@ -796,23 +832,21 @@
         body.light-theme .result-role {
             color: #64748b;
         }
-        body.light-theme .direction-toggle {
-            background: rgba(255, 255, 255, 0.85);
-            border-color: rgba(15, 23, 42, 0.1);
-            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
-        }
-        body.light-theme .direction-btn {
-            color: #64748b;
-            border-right-color: rgba(15, 23, 42, 0.08);
-        }
-        body.light-theme .direction-btn:hover {
-            background: #f1f5f9;
-            color: #1e293b;
-        }
         body.light-theme .settings-panel,
-        body.light-theme .filter-panel {
+        body.light-theme .filter-panel,
+        body.light-theme .direction-panel {
             background: rgba(255, 255, 255, 0.98);
             border-color: rgba(15, 23, 42, 0.1);
+        }
+        body.light-theme .direction-option {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(15, 23, 42, 0.12);
+            color: #475569;
+        }
+        body.light-theme .direction-option.active {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.15);
+            color: #3730a3;
         }
         body.light-theme .settings-title,
         body.light-theme .filter-category-label {
@@ -898,15 +932,24 @@
                 <button id="filter-clear" class="filter-clear">Clear all filters</button>
             </div>
         </div>
-        <div id="direction-toggle" class="direction-toggle" title="Layout direction">
-            <button class="direction-btn active" data-direction="top" title="Top-down">⬇</button>
-            <button class="direction-btn" data-direction="bottom" title="Bottom-up">⬆</button>
-            <button class="direction-btn" data-direction="left" title="Left-to-right">➡</button>
-            <button class="direction-btn" data-direction="right" title="Right-to-left">⬅</button>
+        <div class="direction-container">
+            <button id="direction-btn" class="collapse-btn" title="Choose the layout direction">
+                <span class="collapse-btn-icon">⇅</span> Direction
+            </button>
+            <div id="direction-panel" class="direction-panel">
+                <div class="settings-title">Layout direction</div>
+                <div class="settings-hint">Choose which way the tree grows.</div>
+                <div class="direction-options">
+                    <button class="direction-option active" data-direction="top"><span class="direction-option-icon">↓</span> Top-down</button>
+                    <button class="direction-option" data-direction="left"><span class="direction-option-icon">→</span> Left-to-right</button>
+                    <button class="direction-option" data-direction="right"><span class="direction-option-icon">←</span> Right-to-left</button>
+                    <button class="direction-option" data-direction="bottom"><span class="direction-option-icon">↑</span> Bottom-up</button>
+                </div>
+            </div>
         </div>
+        <button id="theme-toggle-btn" class="theme-toggle" title="Toggle light / dark theme"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     </div>
     <div class="controls-right">
-        <button id="theme-toggle-btn" class="theme-toggle" title="Toggle light / dark theme">🌙</button>
         <div class="search-container">
             <input type="text" id="search-input" class="search-input" placeholder="Search name, role, location..." autocomplete="off">
             <div id="search-results" class="search-results"></div>
@@ -1176,10 +1219,11 @@
                             <span class="expand-button-chevron">${isExpanded ? '▲' : '▼'}</span>
                         </div>`;
                     })
-                    // Expand two levels by default so the structure is visible without
-                    // expanding the whole (potentially huge) org up front. The synthetic
-                    // Uncategorized/Externals groups are folded away again after render.
-                    .initialExpandLevel(2)
+                    // Expand a single level, then expand the real top-level branches
+                    // (see expandTopBranchesExceptSynthetic) so the structure is visible
+                    // without expanding the whole (potentially huge) org up front, while the
+                    // synthetic Uncategorized/Externals groups stay folded.
+                    .initialExpandLevel(1)
                     .linkUpdate(function (linkData, linkIndex, linkElements) {
                         d3.select(this)
                             .attr('stroke', 'rgba(148, 163, 184, 0.3)')
@@ -1240,23 +1284,26 @@
                 const isSyntheticNode = (person) => SYNTHETIC_NODE_IDS.has(person.id);
                 const peopleById = new Map(allPeople.map(person => [person.id, person]));
 
-                // Collapse the synthetic "Uncategorized" and "Externals" groups. The default
-                // view expands two levels, which flags the groups' members as expanded too;
-                // the library would then re-expand a group to reveal any flagged descendant, so
-                // we must clear the flag on the group AND its whole subtree to keep it folded.
-                function collapseSyntheticGroups() {
-                    ['UNCATEGORIZED', 'EXTERN'].forEach(groupId => {
-                        const groupNode = peopleById.get(groupId);
-                        if (groupNode) groupNode._expanded = false;
-                        const descendantStack = [groupId];
-                        while (descendantStack.length) {
-                            const currentId = descendantStack.pop();
-                            allPeople.forEach(person => {
-                                if (person.parentId === currentId) {
-                                    person._expanded = false;
-                                    descendantStack.push(person.id);
-                                }
-                            });
+                // Companion to the single-level default view. d3-org-chart's `_expanded`
+                // flag only reveals a node's *ancestors* (see expandSomeNodes in the lib),
+                // not its own children — so to open the real top-level branches one level
+                // deep we must flag *their reports* (the depth-2 nodes). Flagging every
+                // report of a real branch reveals both that branch and its reports, while
+                // the synthetic "Uncategorized"/"Externals" groups — whose reports we never
+                // flag — stay folded. Root's direct children are flagged too so a childless
+                // real branch (and the collapsed synthetic groups) still show at level 1.
+                function expandTopBranchesExceptSynthetic() {
+                    const rootPerson = allPeople.find(person => !person.parentId);
+                    if (!rootPerson) return;
+                    const realBranchIds = new Set(
+                        allPeople
+                            .filter(person => person.parentId === rootPerson.id && !GROUP_NODE_IDS.has(person.id))
+                            .map(person => person.id)
+                    );
+                    rootPerson._expanded = true;
+                    allPeople.forEach(person => {
+                        if (person.parentId === rootPerson.id || realBranchIds.has(person.parentId)) {
+                            person._expanded = true;
                         }
                     });
                 }
@@ -1265,8 +1312,8 @@
                 // Uncategorized/Externals stay collapsed even though the rest is expanded.
                 function showDefaultView() {
                     allPeople.forEach(person => { delete person._expanded; });
-                    chart.data(allPeople).initialExpandLevel(2).render();
-                    collapseSyntheticGroups();
+                    chart.data(allPeople).initialExpandLevel(1).render();
+                    expandTopBranchesExceptSynthetic();
                     chart.render();
                     chart.fit();
                 }
@@ -1279,7 +1326,7 @@
                     chart.fit();
                 }
 
-                collapseSyntheticGroups();
+                expandTopBranchesExceptSynthetic();
                 chart.render();
 
                 // ---- Contact overlay ----
@@ -1379,9 +1426,12 @@
 
                 // ---- Light / dark theme toggle ----
                 const themeToggleButton = document.getElementById('theme-toggle-btn');
+                // Custom monochrome SVG icons (inherit the button colour via currentColor).
+                const MOON_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+                const SUN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.5v2.3M12 19.2v2.3M4.7 4.7l1.6 1.6M17.7 17.7l1.6 1.6M2.5 12h2.3M19.2 12h2.3M4.7 19.3l1.6-1.6M17.7 6.3l1.6-1.6"/></svg>';
                 function syncThemeToggle() {
                     const isLight = document.body.classList.contains('light-theme');
-                    themeToggleButton.textContent = isLight ? '☀️' : '🌙';
+                    themeToggleButton.innerHTML = isLight ? SUN_ICON : MOON_ICON;
                     themeToggleButton.title = isLight ? 'Switch to dark theme' : 'Switch to light theme';
                 }
                 themeToggleButton.addEventListener('click', () => {
@@ -1407,16 +1457,27 @@
                     chart.fit();
                 });
 
-                // ---- Layout direction toggle (top / bottom / left / right) ----
-                const directionToggle = document.getElementById('direction-toggle');
-                directionToggle.addEventListener('click', (event) => {
-                    const button = event.target.closest('.direction-btn');
+                // ---- Layout direction picker (top / bottom / left / right) ----
+                const directionButton = document.getElementById('direction-btn');
+                const directionPanel = document.getElementById('direction-panel');
+                directionButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    directionPanel.classList.toggle('active');
+                });
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.direction-container')) {
+                        directionPanel.classList.remove('active');
+                    }
+                });
+                directionPanel.addEventListener('click', (event) => {
+                    const button = event.target.closest('.direction-option');
                     if (!button) return;
                     const direction = button.dataset.direction;
-                    directionToggle.querySelectorAll('.direction-btn').forEach(other => {
+                    directionPanel.querySelectorAll('.direction-option').forEach(other => {
                         other.classList.toggle('active', other === button);
                     });
                     chart.layout(direction).render().fit();
+                    directionPanel.classList.remove('active');
                 });
 
                 // ---- Filter panel: narrow the tree by any categorical detail ----
