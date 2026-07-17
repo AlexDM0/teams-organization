@@ -570,7 +570,6 @@
                             country: node.country || "",
                             companyName: node.companyName || "",
                             employeeId: node.employeeId || "",
-                            imageUrl: photos[node.id] || node.imageUrl || null,
                             _directSubordinates: node.children ? node.children.length : 0
                         });
                         if (node.children && node.children.length > 0) {
@@ -678,8 +677,9 @@
                     .nodeContent(function(d, i, arr, state) {
                         const node = d.data;
                         const hasChildren = node._directSubordinates > 0;
-                        const imageStr = node.imageUrl 
-                            ? `<img class="node-image" src="${node.imageUrl}" />`
+                        const photo = photos[node.id];
+                        const imageStr = photo
+                            ? `<img class="node-image" loading="lazy" src="${photo}" />`
                             : `<div class="node-image">${node.name.charAt(0)}</div>`;
                         
                         const isHighlighted = node.id === window.highlightedNodeId;
@@ -716,9 +716,10 @@
                     if (!n) return;
 
                     const avatar = document.getElementById('contact-avatar');
-                    if (n.imageUrl) {
+                    const photo = photos[n.id];
+                    if (photo) {
                         avatar.innerHTML = '';
-                        avatar.style.backgroundImage = `url("${n.imageUrl}")`;
+                        avatar.style.backgroundImage = `url("${photo}")`;
                         avatar.style.backgroundSize = 'cover';
                         avatar.style.backgroundPosition = 'center';
                     } else {

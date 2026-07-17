@@ -167,13 +167,42 @@ async function fetchProfilePictureBase64(client: Client, userId: string): Promis
     }
 }
 
+/** Renders a single-line terminal progress bar with a rough ETA. */
+function renderProgress(done: number, total: number, startMs: number): void {
+    const ratio = total > 0 ? done / total : 1;
+    const width = 30;
+    const filled = Math.round(ratio * width);
+    const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
+    const pct = String(Math.floor(ratio * 100)).padStart(3);
+
+    // Estimate remaining time from the average pace so far.
+    const elapsed = (Date.now() - startMs) / 1000;
+    const rate = done > 0 ? done / elapsed : 0;
+    const remaining = rate > 0 ? Math.round((total - done) / rate) : 0;
+    const eta = done >= total ? 'done' : `ETA ${formatDuration(remaining)}`;
+
+    process.stdout.write(`\r  [${bar}] ${pct}%  ${done}/${total}  ${eta}   `);
+}
+
+/** Formats seconds as a compact m:ss (or h:mm:ss) string. */
+function formatDuration(totalSeconds: number): string {
+    const s = Math.max(0, totalSeconds);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
 export async function fetchAllPhotos(client: Client, users: any[]): Promise<PhotoMap> {
     const photos: PhotoMap = {};
     console.log('Fetching profile pictures...');
 
     const batchSize = 10;
     const REPORT_EVERY = 100;
+    const startMs = Date.now();
     let reported = 0;
+    renderProgress(0, users.length, startMs);
     for (let i = 0; i < users.length; i += batchSize) {
         const batch = users.slice(i, i + batchSize);
         await Promise.all(
@@ -183,9 +212,9 @@ export async function fetchAllPhotos(client: Client, users: any[]): Promise<Phot
             })
         );
         const processed = Math.min(i + batchSize, users.length);
-        // Print activity every 100 users (and once at the end), regardless of org size.
+        // Refresh the bar every 100 users (and once at the end), regardless of org size.
         if (processed - reported >= REPORT_EVERY || processed === users.length) {
-            process.stdout.write(`\rProcessed ${processed} / ${users.length} photos`);
+            renderProgress(processed, users.length, startMs);
             reported = processed;
         }
     }

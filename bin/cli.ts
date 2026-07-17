@@ -107,7 +107,9 @@ async function runExtract(opts: {
     const treePath = path.join(folder, 'org_tree.json');
     const photosPath = path.join(folder, 'photos.json');
     await Bun.write(treePath, JSON.stringify(tree, null, 2));
-    await Bun.write(photosPath, JSON.stringify(photos, null, 2));
+    // Photos are opaque base64 blobs — write them compact (no pretty-print) to
+    // roughly halve the file size and the transient string used to serialize it.
+    await Bun.write(photosPath, JSON.stringify(photos));
     console.log(`💾 Saved ${treePath}`);
     console.log(`💾 Saved ${photosPath} (${Object.keys(photos).length} photos)`);
 
