@@ -172,6 +172,8 @@ export async function fetchAllPhotos(client: Client, users: any[]): Promise<Phot
     console.log('Fetching profile pictures...');
 
     const batchSize = 10;
+    const REPORT_EVERY = 100;
+    let reported = 0;
     for (let i = 0; i < users.length; i += batchSize) {
         const batch = users.slice(i, i + batchSize);
         await Promise.all(
@@ -180,7 +182,12 @@ export async function fetchAllPhotos(client: Client, users: any[]): Promise<Phot
                 if (photo) photos[user.id] = photo;
             })
         );
-        process.stdout.write(`\rProcessed ${Math.min(i + batchSize, users.length)} / ${users.length} photos`);
+        const processed = Math.min(i + batchSize, users.length);
+        // Print activity every 100 users (and once at the end), regardless of org size.
+        if (processed - reported >= REPORT_EVERY || processed === users.length) {
+            process.stdout.write(`\rProcessed ${processed} / ${users.length} photos`);
+            reported = processed;
+        }
     }
     console.log('\nFinished fetching photos.');
     return photos;

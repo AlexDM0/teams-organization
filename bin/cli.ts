@@ -121,6 +121,42 @@ async function runExtract(opts: {
     console.log(`\n✨ Done! Open the portable file directly in your browser:\n   ${htmlPath}`);
 }
 
+async function runUpdate(opts: { folder?: string; inline: boolean }) {
+    const folder = path.resolve(opts.folder ?? process.cwd());
+    console.log(`📁 Folder: ${folder}\n`);
+
+    // Reuse the existing extraction data — the tree is required.
+    const treePath = path.join(folder, 'org_tree.json');
+    const photosPath = path.join(folder, 'photos.json');
+    const treeFile = Bun.file(treePath);
+    if (!(await treeFile.exists())) {
+        console.error(`❌ No org_tree.json found in ${folder}.`);
+        console.error('   Run `teams-org extract` here first.');
+        process.exit(1);
+    }
+    const tree = JSON.parse(await treeFile.text());
+
+    // photos.json is optional (e.g. extracted with --no-photos).
+    const photosFile = Bun.file(photosPath);
+    let photos: Record<string, string> = {};
+    if (await photosFile.exists()) {
+        photos = JSON.parse(await photosFile.text());
+        console.log(`🖼️  Reusing ${photosPath} (${Object.keys(photos).length} photos)`);
+    } else {
+        console.log('🖼️  No photos.json found — building without photos.');
+    }
+    console.log(`🌳 Reusing ${treePath}\n`);
+
+    // Rebake the portable HTML from the current template.
+    const template = await Bun.file(templatePath()).text();
+    const html = await generatePortableHtml(template, tree, photos, opts.inline);
+    const htmlPath = path.join(folder, 'index.html');
+    await Bun.write(htmlPath, html);
+    console.log(`💾 Saved ${htmlPath}`);
+
+    console.log(`\n✨ Done! Open the refreshed file directly in your browser:\n   ${htmlPath}`);
+}
+
 const program = new Command();
 
 program
@@ -151,6 +187,20 @@ program
             });
         } catch (err: any) {
             console.error('\n❌ Extraction failed:', err?.message ?? err);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('update')
+    .description('Rebuild index.html from the existing org_tree.json / photos.json (no re-download).')
+    .option('-f, --folder <path>', 'Folder containing the extraction (default: current directory)')
+    .option('--no-inline', 'Keep CDN <script> links instead of inlining libraries')
+    .action(async (options) => {
+        try {
+            await runUpdate({ folder: options.folder, inline: options.inline });
+        } catch (err: any) {
+            console.error('\n❌ Update failed:', err?.message ?? err);
             process.exit(1);
         }
     });
