@@ -41,8 +41,7 @@ Each extraction folder gets a `tenant.json` that controls which IDs are used:
 
 > Tip: pass `--yes` to skip all prompts and use whatever is in `tenant.json`
 > (defaults on a fresh folder). You can also set the IDs up front with
-> `--client-id` / `--tenant-id` (or `CLIENT_ID` / `TENANT_ID` env vars), which are
-> written straight into `tenant.json`.
+> `--client-id` / `--tenant-id`, which are written straight into `tenant.json`.
 
 ## Using your own app registration (optional)
 

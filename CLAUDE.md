@@ -34,7 +34,6 @@ templates/index.html  The visualization template (D3 org chart + settings + over
 setup.sh              Installer: checks Bun, runs `bun install`, `bun link`.
 package.json          bin/scripts; deps: @azure/msal-node, @microsoft/microsoft-graph-client,
                       commander, @inquirer/prompts.
-.env.example          Default CLIENT_ID/TENANT_ID (public MS Graph PowerShell app).
 ```
 
 ## Commands
@@ -63,7 +62,7 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
    it writes `custom_tenant_id.html` and returns `null` so the CLI exits); re-runs
    use the file's IDs if they differ from the defaults, otherwise ask to confirm
    defaults. `--yes` bypasses the prompts, and explicit `--client-id`/`--tenant-id`
-   (or `CLIENT_ID`/`TENANT_ID`) always win — even on a re-run — and are persisted.
+   always win — even on a re-run — and are persisted.
 3. `extractOrgData()` → `createAccessTokenProvider()` (interactive by default,
    MSAL device-code with `--device-code`; hands out silently-refreshed tokens so
    long runs survive token expiry) → `fetchAllUsers()` (Graph `/users` with
@@ -106,9 +105,9 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
 
 ## Conventions
 
-- **No `.env` required**: `.env.example`'s public app registration is baked in as
-  the default (`DEFAULT_CLIENT_ID` / `DEFAULT_TENANT_ID`). Env vars / flags
-  override.
+- **No config files or env vars for auth**: the public app registration is baked
+  into the code (`DEFAULT_CLIENT_ID` / `DEFAULT_TENANT_ID` in `src/extractor.ts`).
+  Override per-folder via `tenant.json` or the `--client-id`/`--tenant-id` flags.
 - **Keep the tree readable**: never inline base64 photos into `org_tree.json` —
   they belong in `photos.json` / the embedded photo map.
 - When embedding data in HTML, escape it for `<script>` context (`<` → `\u003c`)
@@ -122,7 +121,6 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
 ## Bun usage (this repo targets Bun, not Node)
 
 - `bun <file>`, `bun install`, `bun run <script>`, `bunx <pkg>`.
-- Bun auto-loads `.env` — do not add `dotenv`.
 - Prefer `Bun.file` / `Bun.write` over `node:fs`, and `Bun.$` over `execa`.
 - Type-check with `bunx tsc --noEmit`. There is no test suite yet; if you add one,
   use `bun test`.

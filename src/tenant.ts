@@ -56,7 +56,7 @@ export async function resolveTenantConfig(
         options.cliClientId !== DEFAULT_CLIENT_ID || options.cliTenantId !== DEFAULT_TENANT_ID;
     const tenantFileExists = await Bun.file(tenantPath).exists();
 
-    // An explicit --client-id/--tenant-id (or CLIENT_ID/TENANT_ID env) always wins,
+    // An explicit --client-id/--tenant-id always wins, even on a re-run:
     // even on a re-run: persist it and use it so the flag is never silently ignored.
     if (hasExplicitCustomIds) {
         const explicitConfig: TenantConfig = { clientId: options.cliClientId, tenantId: options.cliTenantId };

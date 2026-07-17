@@ -9,7 +9,10 @@ import { Client, ResponseType } from '@microsoft/microsoft-graph-client';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-// Default public app registration (Microsoft Graph PowerShell), see .env.example.
+// Default public app registration (Microsoft Graph PowerShell). This is
+// Microsoft's multi-tenant "Microsoft Graph PowerShell" application, which is
+// enabled in many organizations, so the tool works out of the box. Override it
+// per-folder via tenant.json or the --client-id/--tenant-id flags.
 export const DEFAULT_CLIENT_ID = '14d82eec-204b-4c2f-b7e8-296a70dab67e';
 export const DEFAULT_TENANT_ID = 'common';
 
