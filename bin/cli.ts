@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 import { Command } from 'commander';
-import { input, confirm } from '@inquirer/prompts';
+import { input } from '@inquirer/prompts';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import {
     DEFAULT_CLIENT_ID,
     DEFAULT_TENANT_ID,
@@ -11,16 +12,16 @@ import {
 } from '../src/extractor';
 import { resolveTenantConfig } from '../src/tenant';
 
-interface Tool {
+interface RequiredTool {
     name: string;
     check: () => Promise<boolean>;
     install: string;
 }
 
-const REQUIRED_TOOLS: Tool[] = [
+const REQUIRED_TOOLS: RequiredTool[] = [
     {
         name: 'bun',
-        check: async () => typeof (globalThis as any).Bun !== 'undefined' || (await which('bun')),
+        check: async () => typeof (globalThis as any).Bun !== 'undefined' || (await isOnPath('bun')),
         install:
             'Install Bun:  curl -fsSL https://bun.sh/install | bash\n' +
             '  (or on Windows PowerShell:  powershell -c "irm bun.sh/install.ps1 | iex")\n' +
@@ -28,35 +29,47 @@ const REQUIRED_TOOLS: Tool[] = [
     },
 ];
 
-async function which(bin: string): Promise<boolean> {
+async function isOnPath(binaryName: string): Promise<boolean> {
     try {
-        const proc = Bun.spawn([process.platform === 'win32' ? 'where' : 'which', bin], {
+        const lookupProcess = Bun.spawn([process.platform === 'win32' ? 'where' : 'which', binaryName], {
             stdout: 'ignore',
             stderr: 'ignore',
         });
-        return (await proc.exited) === 0;
+        return (await lookupProcess.exited) === 0;
     } catch {
         return false;
     }
 }
 
 async function checkPrerequisites(): Promise<boolean> {
-    const missing: Tool[] = [];
+    const missingTools: RequiredTool[] = [];
     for (const tool of REQUIRED_TOOLS) {
-        if (!(await tool.check())) missing.push(tool);
+        if (!(await tool.check())) missingTools.push(tool);
     }
 
-    if (missing.length === 0) return true;
+    if (missingTools.length === 0) return true;
 
     console.error('\n❌ Missing required tools:\n');
-    for (const tool of missing) {
+    for (const tool of missingTools) {
         console.error(`  • ${tool.name}`);
         console.error(`    ${tool.install.split('\n').join('\n    ')}\n`);
     }
     return false;
 }
 
-async function runExtract(opts: {
+/** Reads the CLI version from package.json so it stays in sync with the package. */
+async function readPackageVersion(): Promise<string> {
+    try {
+        const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+        const packageJsonPath = path.join(moduleDirectory, '..', 'package.json');
+        const packageJson = JSON.parse(await Bun.file(packageJsonPath).text());
+        return typeof packageJson.version === 'string' ? packageJson.version : '0.0.0';
+    } catch {
+        return '0.0.0';
+    }
+}
+
+async function runExtract(options: {
     folder?: string;
     yes?: boolean;
     clientId: string;
@@ -73,8 +86,8 @@ async function runExtract(opts: {
     console.log('✅ All required tools are installed.\n');
 
     // Pick output folder — default to the current working directory.
-    let folder = opts.folder ?? process.cwd();
-    if (!opts.folder && !opts.yes) {
+    let folder = options.folder ?? process.cwd();
+    if (!options.folder && !options.yes) {
         folder = await input({
             message: 'Where should the extraction be saved?',
             default: process.cwd(),
@@ -85,22 +98,22 @@ async function runExtract(opts: {
     console.log(`📁 Output folder: ${folder}\n`);
 
     // Resolve which client/tenant IDs to use via tenant.json in the folder.
-    const tenant = await resolveTenantConfig(folder, {
-        yes: opts.yes,
-        cliClientId: opts.clientId,
-        cliTenantId: opts.tenantId,
+    const tenantConfig = await resolveTenantConfig(folder, {
+        yes: options.yes,
+        cliClientId: options.clientId,
+        cliTenantId: options.tenantId,
     });
-    if (!tenant) {
+    if (!tenantConfig) {
         // User chose to customize their IDs first — nothing more to do.
         return;
     }
 
     // Extract data from Microsoft Graph.
     const { tree, photos } = await extractOrgData({
-        clientId: tenant.clientId,
-        tenantId: tenant.tenantId,
-        photos: opts.photos,
-        deviceCode: opts.deviceCode,
+        clientId: tenantConfig.clientId,
+        tenantId: tenantConfig.tenantId,
+        photos: options.photos,
+        deviceCode: options.deviceCode,
     });
 
     // Write the readable tree and the separate photo map.
@@ -115,7 +128,7 @@ async function runExtract(opts: {
 
     // Generate the fully portable, self-contained index.html.
     const template = await Bun.file(templatePath()).text();
-    const html = await generatePortableHtml(template, tree, photos, opts.inline);
+    const html = await generatePortableHtml(template, tree, photos, options.inline);
     const htmlPath = path.join(folder, 'index.html');
     await Bun.write(htmlPath, html);
     console.log(`💾 Saved ${htmlPath}`);
@@ -123,8 +136,8 @@ async function runExtract(opts: {
     console.log(`\n✨ Done! Open the portable file directly in your browser:\n   ${htmlPath}`);
 }
 
-async function runUpdate(opts: { folder?: string; inline: boolean }) {
-    const folder = path.resolve(opts.folder ?? process.cwd());
+async function runUpdate(options: { folder?: string; inline: boolean }) {
+    const folder = path.resolve(options.folder ?? process.cwd());
     console.log(`📁 Folder: ${folder}\n`);
 
     // Reuse the existing extraction data — the tree is required.
@@ -151,7 +164,7 @@ async function runUpdate(opts: { folder?: string; inline: boolean }) {
 
     // Rebake the portable HTML from the current template.
     const template = await Bun.file(templatePath()).text();
-    const html = await generatePortableHtml(template, tree, photos, opts.inline);
+    const html = await generatePortableHtml(template, tree, photos, options.inline);
     const htmlPath = path.join(folder, 'index.html');
     await Bun.write(htmlPath, html);
     console.log(`💾 Saved ${htmlPath}`);
@@ -164,7 +177,7 @@ const program = new Command();
 program
     .name('teams-org')
     .description('Extract a Microsoft Teams / Entra ID organization tree into a portable HTML visualization.')
-    .version('1.0.0');
+    .version(await readPackageVersion());
 
 program
     .command('extract')
@@ -187,8 +200,8 @@ program
                 inline: options.inline,
                 deviceCode: options.deviceCode,
             });
-        } catch (err: any) {
-            console.error('\n❌ Extraction failed:', err?.message ?? err);
+        } catch (error: any) {
+            console.error('\n❌ Extraction failed:', error?.message ?? error);
             process.exit(1);
         }
     });
@@ -201,8 +214,8 @@ program
     .action(async (options) => {
         try {
             await runUpdate({ folder: options.folder, inline: options.inline });
-        } catch (err: any) {
-            console.error('\n❌ Update failed:', err?.message ?? err);
+        } catch (error: any) {
+            console.error('\n❌ Update failed:', error?.message ?? error);
             process.exit(1);
         }
     });

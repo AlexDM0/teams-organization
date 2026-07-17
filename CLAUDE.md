@@ -43,12 +43,14 @@ package.json          bin/scripts; deps: @azure/msal-node, @microsoft/microsoft-
 ./setup.sh                 # install deps + link `teams-org` onto PATH (macOS/Linux/Windows)
 bun run extract            # = bun run bin/cli.ts extract
 teams-org extract          # after linking
+teams-org update           # rebuild index.html from existing org_tree.json/photos.json (no re-download)
 teams-org extract --help   # all flags
 bunx tsc --noEmit          # type-check (the primary validation — there is no test suite yet)
 ```
 
-CLI flags: `--folder`, `--yes`, `--client-id`, `--tenant-id`, `--no-photos`,
-`--no-inline`, `--device-code`.
+CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
+`--no-photos`, `--no-inline`, `--device-code`. The `update` command accepts
+`--folder` and `--no-inline`.
 
 ## Architecture & data flow
 
@@ -60,21 +62,31 @@ CLI flags: `--folder`, `--yes`, `--client-id`, `--tenant-id`, `--no-photos`,
    first run seeds it with the defaults and asks whether to use custom IDs (if so
    it writes `custom_tenant_id.html` and returns `null` so the CLI exits); re-runs
    use the file's IDs if they differ from the defaults, otherwise ask to confirm
-   defaults. `--yes` and explicit `--client-id`/`--tenant-id` bypass the prompts.
-3. `extractOrgData()` → `authenticate()` (interactive by default, MSAL
-   device-code with `--device-code`) → `fetchAllUsers()` (Graph `/users` with
-   `$expand=manager`) → `fetchAllPhotos()` → `buildTree()`.
+   defaults. `--yes` bypasses the prompts, and explicit `--client-id`/`--tenant-id`
+   (or `CLIENT_ID`/`TENANT_ID`) always win — even on a re-run — and are persisted.
+3. `extractOrgData()` → `createAccessTokenProvider()` (interactive by default,
+   MSAL device-code with `--device-code`; hands out silently-refreshed tokens so
+   long runs survive token expiry) → `fetchAllUsers()` (Graph `/users` with
+   `$expand=manager`) → `fetchAllPhotos()` → `buildTree()` (which breaks any
+   manager cycles so the tree never recurses forever).
    `fetchAllPhotos()` batches (10 at a time) and requests **120×120 thumbnails**
-   (`/users/{id}/photos/120x120/$value`, falling back to full-res
-   `/photo/$value`); 404s are ignored. Thumbnails matter: full-res photos bloat
-   the embedded `index.html` to hundreds of MB and break `file://` rendering.
+   (`/users/{id}/photos/120x120/$value`, falling back to full-res `/photo/$value`
+   **only on a genuine 404**); throttling (429/503) is retried with backoff and
+   other errors yield no photo (never a full-res fallback). Thumbnails matter:
+   full-res photos bloat the embedded `index.html` to hundreds of MB and break
+   `file://` rendering.
 4. `generatePortableHtml()` reads `templates/index.html`, optionally inlines the
-   CDN `<script>` libs (downloads them; falls back to the CDN link on failure),
-   and injects the tree + photos as `<script type="application/json">` tags.
+   CDN `<script>` libs (downloads them and **verifies each against a pinned
+   Subresource Integrity hash in `VENDOR_SCRIPTS`**, failing closed on a
+   mismatch; falls back to the CDN link only when a download is unreachable), and
+   injects the tree + photos as `<script type="application/json">` tags at the
+   stable `<!-- ORG_DATA_PLACEHOLDER -->` comment.
    **Every `html.replace()` here must use a replacement _function_** (`() =>
    ...`), never a replacement string — inlined library source and JSON contain
    `$` sequences (`$&`, `` $` ``, `$'`) that `String.replace` would otherwise
    interpret, silently corrupting/truncating the output (this broke d3 once).
+   Injections go through `replaceOrThrow`, which asserts the anchor was found so
+   a template change can never silently produce a broken portable file.
 5. `templatePath()` resolves `templates/index.html` relative to the module
    (`import.meta.url`), so it works regardless of CWD — keep it in sync if files
    move.
@@ -87,9 +99,10 @@ CLI flags: `--folder`, `--yes`, `--client-id`, `--tenant-id`, `--no-photos`,
 - Photos are merged back onto nodes by id at render time (`photos[node.id]`).
 - Cogwheel (⚙️) settings panel lets the user pick **up to 3** fields to show per
   card (persisted in `localStorage`); clicking a card opens a contact overlay
-  with all fields. Field definitions live in the `FIELD_DEFS` array — add new
-  profile fields there **and** in `src/extractor.ts` (`$select`, `OrgNode`,
-  `buildTree`).
+  with all fields. Field definitions live in the `FIELD_DEFINITIONS` array — add
+  new profile fields there **and** in `src/extractor.ts` (`$select`, `OrgNode`,
+  `buildTree`). All name/position/field values are passed through `escapeHtml`
+  when rendered into card/search markup, so keep new interpolations escaped too.
 
 ## Conventions
 
@@ -102,7 +115,7 @@ CLI flags: `--folder`, `--yes`, `--client-id`, `--tenant-id`, `--no-photos`,
   as `generatePortableHtml` does, and inject with a replacement **function**, not
   a string (see data-flow step 4 — protects against `$`-pattern corruption).
 - Adding a profile field is a two-place change: `src/extractor.ts` (query +
-  `OrgNode` + `buildTree`) and `templates/index.html` (`FIELD_DEFS`).
+  `OrgNode` + `buildTree`) and `templates/index.html` (`FIELD_DEFINITIONS`).
 - After changing `bin`/scripts/paths, re-run `bun link` so the global `teams-org`
   shim points at the right file.
 

@@ -9,10 +9,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+    <!-- Version-pinned with Subresource Integrity so the browser verifies these libraries.
+         `teams-org extract` inlines them (also integrity-checked) unless run with --no-inline. -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js" integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.0" integrity="sha384-jdNdDz72Yl0UnyMxO94TJN0XhwcJ5fB5IBuMJ3SWALIOOuR2XoRugVBewvDI9rH1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js" integrity="sha384-6pTgblH+kfP7e8kLkJxI96n+G6MCr28XHUtlXyr3cSjSyT/co6eOBwwCPAX8pBb5" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0" integrity="sha384-PCSoOZTpbkikBEtd/+uV3WNdc676i9KUf01KOA8CnJotvlx8rRrETbDuwdjqTYvt" crossorigin="anonymous"></script>
     <style>
         body {
             margin: 0;
@@ -497,67 +499,73 @@
     </div>
     <div id="chart-container"></div>
 
+    <!-- ORG_DATA_PLACEHOLDER -->
     <script>
         (function () {
-            const embedded = document.getElementById('org-data-embedded');
-            const embeddedPhotos = document.getElementById('org-photos-embedded');
-            let dataPromise;
-            if (embedded) {
-                dataPromise = Promise.resolve().then(() => ({
-                    tree: JSON.parse(embedded.textContent),
-                    photos: embeddedPhotos ? JSON.parse(embeddedPhotos.textContent) : {}
+            const embeddedTreeElement = document.getElementById('org-data-embedded');
+            const embeddedPhotosElement = document.getElementById('org-photos-embedded');
+            let orgDataPromise;
+            if (embeddedTreeElement) {
+                // Portable build: data is embedded directly in the page.
+                orgDataPromise = Promise.resolve().then(() => ({
+                    tree: JSON.parse(embeddedTreeElement.textContent),
+                    photos: embeddedPhotosElement ? JSON.parse(embeddedPhotosElement.textContent) : {}
                 }));
             } else {
-                dataPromise = Promise.all([
-                    fetch('org_tree.json').then(res => {
-                        if (!res.ok) throw new Error("Could not load org_tree.json");
-                        return res.json();
+                // Dev mode: fetch the raw JSON files served next to this template.
+                orgDataPromise = Promise.all([
+                    fetch('org_tree.json').then(response => {
+                        if (!response.ok) throw new Error("Could not load org_tree.json");
+                        return response.json();
                     }),
-                    fetch('photos.json').then(res => res.ok ? res.json() : {}).catch(() => ({}))
+                    fetch('photos.json').then(response => response.ok ? response.json() : {}).catch(() => ({}))
                 ]).then(([tree, photos]) => ({ tree, photos }));
             }
-            dataPromise
+            orgDataPromise
             .then(({ tree, photos }) => {
-                const data = tree;
                 document.getElementById('loading').style.display = 'none';
 
                 // Catalog of profile fields that can be shown on cards / in the overlay.
-                const FIELD_DEFS = [
-                    { key: 'email', label: 'Email', icon: '✉️', get: n => n.email },
-                    { key: 'role', label: 'Department', icon: '🏢', get: n => n.role },
-                    { key: 'mobilePhone', label: 'Mobile', icon: '📱', get: n => n.mobilePhone },
-                    { key: 'businessPhone', label: 'Business phone', icon: '☎️', get: n => n.businessPhone },
-                    { key: 'officeLocation', label: 'Office', icon: '🏬', get: n => n.officeLocation },
-                    { key: 'location', label: 'Location', icon: '📍', get: n => [n.city, n.state, n.country].filter(Boolean).join(', ') },
-                    { key: 'companyName', label: 'Company', icon: '🏛️', get: n => n.companyName },
-                    { key: 'employeeId', label: 'Employee ID', icon: '🆔', get: n => n.employeeId },
+                const FIELD_DEFINITIONS = [
+                    { key: 'email', label: 'Email', icon: '✉️', get: person => person.email },
+                    { key: 'role', label: 'Department', icon: '🏢', get: person => person.role },
+                    { key: 'mobilePhone', label: 'Mobile', icon: '📱', get: person => person.mobilePhone },
+                    { key: 'businessPhone', label: 'Business phone', icon: '☎️', get: person => person.businessPhone },
+                    { key: 'officeLocation', label: 'Office', icon: '🏬', get: person => person.officeLocation },
+                    { key: 'location', label: 'Location', icon: '📍', get: person => [person.city, person.state, person.country].filter(Boolean).join(', ') },
+                    { key: 'companyName', label: 'Company', icon: '🏛️', get: person => person.companyName },
+                    { key: 'employeeId', label: 'Employee ID', icon: '🆔', get: person => person.employeeId },
                 ];
                 const MAX_CARD_FIELDS = 3;
-                const FIELD_BY_KEY = Object.fromEntries(FIELD_DEFS.map(f => [f.key, f]));
+                const FIELD_DEFINITION_BY_KEY = Object.fromEntries(FIELD_DEFINITIONS.map(field => [field.key, field]));
 
                 // Which fields show on the cards (persisted, capped at MAX_CARD_FIELDS).
-                function loadCardFields() {
+                function loadSelectedCardFields() {
                     try {
-                        const saved = JSON.parse(localStorage.getItem('teamsOrg.cardFields'));
-                        if (Array.isArray(saved)) {
-                            const valid = saved.filter(k => FIELD_BY_KEY[k]).slice(0, MAX_CARD_FIELDS);
-                            if (valid.length) return valid;
+                        const savedFields = JSON.parse(localStorage.getItem('teamsOrg.cardFields'));
+                        if (Array.isArray(savedFields)) {
+                            const validFields = savedFields.filter(key => FIELD_DEFINITION_BY_KEY[key]).slice(0, MAX_CARD_FIELDS);
+                            if (validFields.length) return validFields;
                         }
-                    } catch (e) { /* ignore */ }
+                    } catch (error) { /* ignore malformed stored value */ }
                     return ['email', 'role', 'mobilePhone'];
                 }
-                let cardFields = loadCardFields();
+                let selectedCardFields = loadSelectedCardFields();
 
-                const escapeHtml = (str) => String(str == null ? '' : str)
+                const escapeHtml = (value) => String(value == null ? '' : value)
                     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-                
-                let flatData = [];
-                function flattenTree(nodes, parentId = null) {
+
+                // Flatten the nested tree into the flat id/parentId list d3-org-chart expects.
+                // A visited set guards against manager cycles (which would otherwise recurse forever).
+                let peopleList = [];
+                function flattenTree(nodes, visitedIds = new Set()) {
                     nodes.forEach(node => {
-                        flatData.push({
+                        if (visitedIds.has(node.id)) return;
+                        visitedIds.add(node.id);
+                        peopleList.push({
                             id: node.id,
-                            parentId: node.parentId || "", 
+                            parentId: node.parentId || "",
                             name: node.name,
                             position: node.position,
                             email: node.email,
@@ -570,136 +578,139 @@
                             country: node.country || "",
                             companyName: node.companyName || "",
                             employeeId: node.employeeId || "",
-                            _directSubordinates: node.children ? node.children.length : 0
+                            directReportCount: node.children ? node.children.length : 0
                         });
                         if (node.children && node.children.length > 0) {
-                            flattenTree(node.children, node.id);
+                            flattenTree(node.children, visitedIds);
                         }
                     });
                 }
-                
-                flattenTree(data);
 
-                const roots = flatData.filter(d => !d.parentId);
-                if (roots.length > 1) {
-                    // Create an Uncategorized node for all isolated employees
-                    flatData.push({
+                flattenTree(tree);
+
+                const rootPeople = peopleList.filter(person => !person.parentId);
+                if (rootPeople.length > 1) {
+                    // Group the isolated / external roots under synthetic parent nodes so the
+                    // chart has a single visual root instead of many disconnected trees.
+                    peopleList.push({
                         id: "UNCATEGORIZED",
                         parentId: "ROOT",
                         name: "Uncategorized",
                         position: "Unassigned",
                         email: "",
                         role: "",
-                        imageUrl: null,
-                        _directSubordinates: 0
+                        directReportCount: 0
                     });
 
-                    // Create an Extern node for external people
-                    flatData.push({
+                    peopleList.push({
                         id: "EXTERN",
                         parentId: "ROOT",
                         name: "Externals",
                         position: "External Partners / Contractors",
                         email: "",
                         role: "",
-                        imageUrl: null,
-                        _directSubordinates: 0
+                        directReportCount: 0
                     });
 
-                    let actualRootsCount = 0;
+                    let realRootCount = 0;
                     let uncategorizedCount = 0;
-                    let externCount = 0;
+                    let externalCount = 0;
 
-                    roots.forEach(r => {
-                        const isExtern = (r.position && r.position.toLowerCase().includes('extern')) || 
-                                         (r.role && r.role.toLowerCase().includes('extern'));
-                        
-                        const isEmployee = !r.position || r.position.trim().toLowerCase() === 'employee';
-                        
-                        if (isExtern) {
-                            r.parentId = "EXTERN";
-                            externCount++;
-                        } else if (r._directSubordinates === 0 && isEmployee) {
-                            r.parentId = "UNCATEGORIZED";
+                    // A root counts as "external" when the word "extern" appears as a whole
+                    // word in its title or department (matches "Extern", "External", not "Externship Coordinator").
+                    const looksExternal = (person) => {
+                        const externalWordPattern = /\bextern/i;
+                        return externalWordPattern.test(person.position || '') || externalWordPattern.test(person.role || '');
+                    };
+
+                    rootPeople.forEach(person => {
+                        const isEmployeeWithoutTitle = !person.position || person.position.trim().toLowerCase() === 'employee';
+
+                        if (looksExternal(person)) {
+                            person.parentId = "EXTERN";
+                            externalCount++;
+                        } else if (person.directReportCount === 0 && isEmployeeWithoutTitle) {
+                            person.parentId = "UNCATEGORIZED";
                             uncategorizedCount++;
                         } else {
-                            r.parentId = "ROOT";
-                            actualRootsCount++;
+                            person.parentId = "ROOT";
+                            realRootCount++;
                         }
                     });
 
-                    const uncategorizedNode = flatData.find(d => d.id === "UNCATEGORIZED");
-                    uncategorizedNode._directSubordinates = uncategorizedCount;
-
+                    const uncategorizedNode = peopleList.find(person => person.id === "UNCATEGORIZED");
+                    uncategorizedNode.directReportCount = uncategorizedCount;
                     if (uncategorizedCount === 0) {
-                        flatData = flatData.filter(d => d.id !== "UNCATEGORIZED");
-                    }
-                    
-                    const externNode = flatData.find(d => d.id === "EXTERN");
-                    externNode._directSubordinates = externCount;
-
-                    if (externCount === 0) {
-                        flatData = flatData.filter(d => d.id !== "EXTERN");
+                        peopleList = peopleList.filter(person => person.id !== "UNCATEGORIZED");
                     }
 
-                    flatData.push({
+                    const externalNode = peopleList.find(person => person.id === "EXTERN");
+                    externalNode.directReportCount = externalCount;
+                    if (externalCount === 0) {
+                        peopleList = peopleList.filter(person => person.id !== "EXTERN");
+                    }
+
+                    peopleList.push({
                         id: "ROOT",
                         parentId: "",
                         name: "Organization",
                         position: "Company",
                         email: "",
                         role: "",
-                        imageUrl: null,
-                        _directSubordinates: actualRootsCount + (uncategorizedCount > 0 ? 1 : 0) + (externCount > 0 ? 1 : 0)
+                        directReportCount: realRootCount + (uncategorizedCount > 0 ? 1 : 0) + (externalCount > 0 ? 1 : 0)
                     });
-                } else if (roots.length === 0 && flatData.length > 0) {
-                    flatData[0].parentId = "";
+                } else if (rootPeople.length === 0 && peopleList.length > 0) {
+                    // Everyone had a manager (a full cycle broken above): promote the first person to root.
+                    peopleList[0].parentId = "";
                 }
 
-                // Sort the data so people with more subordinates appear first (at the top/left of branches)
-                flatData.sort((a, b) => b._directSubordinates - a._directSubordinates);
+                // Sort so people with more direct reports appear first (at the top/left of branches).
+                peopleList.sort((first, second) => second.directReportCount - first.directReportCount);
 
                 window.highlightedNodeId = null;
 
                 const chart = new d3.OrgChart()
                     .container('#chart-container')
-                    .data(flatData)
-                    .nodeWidth(d => 260)
-                    .nodeHeight(d => 240)
-                    .childrenMargin(d => 50)
-                    .compactMarginBetween(d => 40)
-                    .compactMarginPair(d => 40)
-                    .linkUpdate(function (d, i, arr) {
+                    .data(peopleList)
+                    .nodeWidth(() => 260)
+                    .nodeHeight(() => 240)
+                    .childrenMargin(() => 50)
+                    .compactMarginBetween(() => 40)
+                    .compactMarginPair(() => 40)
+                    // Expand two levels by default so the structure is visible without
+                    // expanding the whole (potentially huge) org up front.
+                    .initialExpandLevel(2)
+                    .linkUpdate(function (linkData, linkIndex, linkElements) {
                         d3.select(this)
                             .attr('stroke', 'rgba(148, 163, 184, 0.3)')
                             .attr('stroke-width', 2);
                     })
-                    .nodeContent(function(d, i, arr, state) {
-                        const node = d.data;
-                        const hasChildren = node._directSubordinates > 0;
-                        const photo = photos[node.id];
-                        const imageStr = photo
-                            ? `<img class="node-image" loading="lazy" src="${photo}" />`
-                            : `<div class="node-image">${node.name.charAt(0)}</div>`;
-                        
-                        const isHighlighted = node.id === window.highlightedNodeId;
-                        
+                    .nodeContent(function (chartNode, nodeIndex, allNodes, chartState) {
+                        const person = chartNode.data;
+                        const hasDirectReports = person.directReportCount > 0;
+                        const photoDataUrl = photos[person.id];
+                        const avatarMarkup = photoDataUrl
+                            ? `<img class="node-image" loading="lazy" src="${photoDataUrl}" />`
+                            : `<div class="node-image">${escapeHtml(person.name.charAt(0))}</div>`;
+
+                        const isHighlighted = person.id === window.highlightedNodeId;
+
                         return `
                             <div style="padding-top: 15px; height: 100%;">
                                 <div class="node-card ${isHighlighted ? 'highlighted' : ''}" style="height: 220px; width: 260px;">
-                                    ${hasChildren ? `<div class="badge-count">${node._directSubordinates}</div>` : ''}
-                                    ${imageStr}
-                                    <div class="node-name" title="${node.name}">${node.name}</div>
-                                    <div class="node-position" title="${node.position}">${node.position || ''}</div>
-                                    <div class="node-details" onclick="event.stopPropagation(); window.showContact('${node.id}')" title="Click for full contact info">
-                                        ${cardFields
-                                            .map(key => FIELD_BY_KEY[key])
+                                    ${hasDirectReports ? `<div class="badge-count">${person.directReportCount}</div>` : ''}
+                                    ${avatarMarkup}
+                                    <div class="node-name" title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</div>
+                                    <div class="node-position" title="${escapeHtml(person.position)}">${escapeHtml(person.position || '')}</div>
+                                    <div class="node-details" onclick="event.stopPropagation(); window.showContact('${person.id}')" title="Click for full contact info">
+                                        ${selectedCardFields
+                                            .map(key => FIELD_DEFINITION_BY_KEY[key])
                                             .filter(Boolean)
-                                            .map(f => ({ icon: f.icon, value: f.get(node) }))
-                                            .filter(d => d.value)
-                                            .map(d => `
-                                        <div class="node-detail-item" title="${escapeHtml(d.value)}">
-                                            <span class="node-detail-icon">${d.icon}</span> ${escapeHtml(d.value)}
+                                            .map(field => ({ icon: field.icon, value: field.get(person) }))
+                                            .filter(entry => entry.value)
+                                            .map(entry => `
+                                        <div class="node-detail-item" title="${escapeHtml(entry.value)}">
+                                            <span class="node-detail-icon">${entry.icon}</span> ${escapeHtml(entry.value)}
                                         </div>`).join('')}
                                         <div class="node-detail-more">👤 View contact</div>
                                     </div>
@@ -711,36 +722,36 @@
 
                 // ---- Contact overlay ----
                 const overlay = document.getElementById('contact-overlay');
-                window.showContact = function (id) {
-                    const n = flatData.find(d => d.id === id);
-                    if (!n) return;
+                window.showContact = function (personId) {
+                    const person = peopleList.find(candidate => candidate.id === personId);
+                    if (!person) return;
 
                     const avatar = document.getElementById('contact-avatar');
-                    const photo = photos[n.id];
-                    if (photo) {
+                    const photoDataUrl = photos[person.id];
+                    if (photoDataUrl) {
                         avatar.innerHTML = '';
-                        avatar.style.backgroundImage = `url("${photo}")`;
+                        avatar.style.backgroundImage = `url("${photoDataUrl}")`;
                         avatar.style.backgroundSize = 'cover';
                         avatar.style.backgroundPosition = 'center';
                     } else {
                         avatar.style.backgroundImage = 'none';
-                        avatar.textContent = (n.name || '?').charAt(0);
+                        avatar.textContent = (person.name || '?').charAt(0);
                     }
 
-                    document.getElementById('contact-name').textContent = n.name || '';
-                    document.getElementById('contact-position').textContent = n.position || '';
+                    document.getElementById('contact-name').textContent = person.name || '';
+                    document.getElementById('contact-position').textContent = person.position || '';
 
-                    const rows = FIELD_DEFS
-                        .map(f => ({ label: f.label, icon: f.icon, value: f.get(n) }))
-                        .filter(r => r.value)
-                        .map(r => `
+                    const contactRows = FIELD_DEFINITIONS
+                        .map(field => ({ label: field.label, icon: field.icon, value: field.get(person) }))
+                        .filter(row => row.value)
+                        .map(row => `
                             <div class="contact-row">
-                                <span class="contact-row-icon">${r.icon}</span>
-                                <span class="contact-row-label">${escapeHtml(r.label)}</span>
-                                <span class="contact-row-value">${escapeHtml(r.value)}</span>
+                                <span class="contact-row-icon">${row.icon}</span>
+                                <span class="contact-row-label">${escapeHtml(row.label)}</span>
+                                <span class="contact-row-value">${escapeHtml(row.value)}</span>
                             </div>`).join('');
                     document.getElementById('contact-body').innerHTML =
-                        rows || '<div class="contact-empty">No additional contact information available.</div>';
+                        contactRows || '<div class="contact-empty">No additional contact information available.</div>';
 
                     overlay.classList.add('active');
                 };
@@ -748,63 +759,63 @@
                     overlay.classList.remove('active');
                 };
                 document.getElementById('contact-close').addEventListener('click', window.hideContact);
-                overlay.addEventListener('click', (e) => {
-                    if (e.target === overlay) window.hideContact();
+                overlay.addEventListener('click', (event) => {
+                    if (event.target === overlay) window.hideContact();
                 });
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape') window.hideContact();
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') window.hideContact();
                 });
 
                 // ---- Settings cogwheel: choose up to 3 card fields ----
-                const settingsBtn = document.getElementById('settings-btn');
+                const settingsButton = document.getElementById('settings-btn');
                 const settingsPanel = document.getElementById('settings-panel');
                 const settingsOptions = document.getElementById('settings-options');
 
                 function renderSettingsOptions() {
-                    const atMax = cardFields.length >= MAX_CARD_FIELDS;
-                    settingsOptions.innerHTML = FIELD_DEFS.map(f => {
-                        const checked = cardFields.includes(f.key);
-                        const disabled = !checked && atMax;
+                    const atMaximumFields = selectedCardFields.length >= MAX_CARD_FIELDS;
+                    settingsOptions.innerHTML = FIELD_DEFINITIONS.map(field => {
+                        const isSelected = selectedCardFields.includes(field.key);
+                        const isDisabled = !isSelected && atMaximumFields;
                         return `
-                            <label class="settings-option ${disabled ? 'disabled' : ''}">
-                                <input type="checkbox" value="${f.key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
-                                <span class="settings-option-icon">${f.icon}</span>
-                                <span>${escapeHtml(f.label)}</span>
+                            <label class="settings-option ${isDisabled ? 'disabled' : ''}">
+                                <input type="checkbox" value="${field.key}" ${isSelected ? 'checked' : ''} ${isDisabled ? 'disabled' : ''}>
+                                <span class="settings-option-icon">${field.icon}</span>
+                                <span>${escapeHtml(field.label)}</span>
                             </label>`;
                     }).join('');
                 }
 
-                function applyCardFields() {
-                    localStorage.setItem('teamsOrg.cardFields', JSON.stringify(cardFields));
+                function applySelectedCardFields() {
+                    localStorage.setItem('teamsOrg.cardFields', JSON.stringify(selectedCardFields));
                     chart.render();
                 }
 
-                settingsOptions.addEventListener('change', (e) => {
-                    const cb = e.target;
-                    if (!cb || cb.type !== 'checkbox') return;
-                    if (cb.checked) {
-                        if (!cardFields.includes(cb.value) && cardFields.length < MAX_CARD_FIELDS) {
-                            cardFields.push(cb.value);
+                settingsOptions.addEventListener('change', (event) => {
+                    const checkbox = event.target;
+                    if (!checkbox || checkbox.type !== 'checkbox') return;
+                    if (checkbox.checked) {
+                        if (!selectedCardFields.includes(checkbox.value) && selectedCardFields.length < MAX_CARD_FIELDS) {
+                            selectedCardFields.push(checkbox.value);
                         }
                     } else {
-                        cardFields = cardFields.filter(k => k !== cb.value);
+                        selectedCardFields = selectedCardFields.filter(key => key !== checkbox.value);
                     }
                     renderSettingsOptions();
-                    applyCardFields();
+                    applySelectedCardFields();
                 });
 
-                settingsBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
+                settingsButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
                     settingsPanel.classList.toggle('active');
                 });
-                document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.settings-container')) {
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.settings-container')) {
                         settingsPanel.classList.remove('active');
                     }
                 });
                 renderSettingsOptions();
 
-                const fuse = new Fuse(flatData, {
+                const fuzzySearch = new Fuse(peopleList, {
                     keys: ['name', 'role', 'position', 'email'],
                     threshold: 0.3,
                     distance: 100
@@ -812,13 +823,13 @@
 
                 const searchInput = document.getElementById('search-input');
                 const searchResults = document.getElementById('search-results');
-                
+
                 let selectedSearchIndex = -1;
 
                 function updateSearchSelection() {
-                    const items = Array.from(searchResults.querySelectorAll('.search-result-item'));
-                    items.forEach((item, index) => {
-                        if (index === selectedSearchIndex) {
+                    const resultItems = Array.from(searchResults.querySelectorAll('.search-result-item'));
+                    resultItems.forEach((item, itemIndex) => {
+                        if (itemIndex === selectedSearchIndex) {
                             item.classList.add('selected');
                             item.scrollIntoView({ block: 'nearest' });
                         } else {
@@ -827,91 +838,91 @@
                     });
                 }
 
-                searchInput.addEventListener('input', (e) => {
+                searchInput.addEventListener('input', (event) => {
                     selectedSearchIndex = -1; // Reset selection on new input
-                    const query = e.target.value;
+                    const query = event.target.value;
                     if (!query) {
                         searchResults.classList.remove('active');
                         return;
                     }
-                    
-                    const results = fuse.search(query).slice(0, 8); // Show top 8 matches
-                    
-                    if (results.length === 0) {
+
+                    const matches = fuzzySearch.search(query).slice(0, 8); // Show top 8 matches
+
+                    if (matches.length === 0) {
                         searchResults.innerHTML = '<div style="padding:12px; color:#94a3b8; font-size:13px; text-align:center;">No results found</div>';
                     } else {
-                        searchResults.innerHTML = results.map((r, i) => `
-                            <div class="search-result-item" data-id="${r.item.id}">
-                                <div class="result-name">${r.item.name}</div>
-                                <div class="result-role">${r.item.position || r.item.role || 'Employee'}</div>
+                        searchResults.innerHTML = matches.map(match => `
+                            <div class="search-result-item" data-id="${escapeHtml(match.item.id)}">
+                                <div class="result-name">${escapeHtml(match.item.name)}</div>
+                                <div class="result-role">${escapeHtml(match.item.position || match.item.role || 'Employee')}</div>
                             </div>
                         `).join('');
                     }
                     searchResults.classList.add('active');
                 });
 
-                searchInput.addEventListener('keydown', (e) => {
-                    const items = Array.from(searchResults.querySelectorAll('.search-result-item'));
-                    if (items.length === 0 || !searchResults.classList.contains('active')) return;
+                searchInput.addEventListener('keydown', (event) => {
+                    const resultItems = Array.from(searchResults.querySelectorAll('.search-result-item'));
+                    if (resultItems.length === 0 || !searchResults.classList.contains('active')) return;
 
-                    if (e.key === 'ArrowDown') {
-                        e.preventDefault();
-                        selectedSearchIndex = Math.min(selectedSearchIndex + 1, items.length - 1);
+                    if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        selectedSearchIndex = Math.min(selectedSearchIndex + 1, resultItems.length - 1);
                         updateSearchSelection();
-                    } else if (e.key === 'ArrowUp') {
-                        e.preventDefault();
+                    } else if (event.key === 'ArrowUp') {
+                        event.preventDefault();
                         selectedSearchIndex = Math.max(selectedSearchIndex - 1, -1);
                         updateSearchSelection();
-                    } else if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (selectedSearchIndex >= 0 && selectedSearchIndex < items.length) {
-                            items[selectedSearchIndex].click();
-                        } else if (items.length > 0) {
+                    } else if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (selectedSearchIndex >= 0 && selectedSearchIndex < resultItems.length) {
+                            resultItems[selectedSearchIndex].click();
+                        } else if (resultItems.length > 0) {
                             // If they press enter without selecting, default to the first one
-                            items[0].click();
+                            resultItems[0].click();
                         }
                     }
                 });
 
-                searchResults.addEventListener('click', (e) => {
-                    const item = e.target.closest('.search-result-item');
-                    if (!item) return;
-                    
-                    const nodeId = item.getAttribute('data-id');
-                    
+                searchResults.addEventListener('click', (event) => {
+                    const resultItem = event.target.closest('.search-result-item');
+                    if (!resultItem) return;
+
+                    const nodeId = resultItem.getAttribute('data-id');
+
                     // Hide results
                     searchResults.classList.remove('active');
-                    searchInput.value = item.querySelector('.result-name').innerText;
-                    
+                    searchInput.value = resultItem.querySelector('.result-name').innerText;
+
                     // Update state and rerender to show highlight
                     window.highlightedNodeId = nodeId;
-                    
+
                     chart.clearHighlighting();
                     chart.setUpToTheRootHighlighted(nodeId);
                     chart.render();
-                    
+
                     // Delay centering slightly to allow expansion animation
                     setTimeout(() => {
                         chart.center(nodeId);
                     }, 300);
                 });
-                
+
                 // Close dropdown when clicking outside
-                document.addEventListener('click', (e) => {
-                    if (!e.target.closest('.search-container')) {
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.search-container')) {
                         searchResults.classList.remove('active');
                     }
                 });
-                    
+
                 // Instead of expanding the entire organization (which causes massive lag for large orgs),
-                // we expand only a few levels or let the user expand manually.
+                // we expand only a few levels (see initialExpandLevel) and let the user expand manually.
                 chart.fit();
             })
-            .catch(err => {
+            .catch(error => {
                 document.getElementById('loading').innerHTML = `
                     <div style="text-align: center; color: #f87171; max-width: 400px; padding: 24px; background: rgba(30, 41, 59, 0.8); border-radius: 12px; border: 1px solid rgba(248, 113, 113, 0.2);">
                         <h3 style="margin-top: 0; font-weight: 500;">Error Loading Data</h3>
-                        <p style="opacity: 0.9;">${err.message}</p>
+                        <p style="opacity: 0.9;">${error.message}</p>
                         <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
                         <p style="font-size: 13px; color: #94a3b8; text-align: left; line-height: 1.5; margin-bottom: 0;">
                             1. Did you run <code>teams-org extract</code> to generate <strong>org_tree.json</strong>?<br>

@@ -10,26 +10,32 @@ export interface TenantConfig {
 export const TENANT_FILE = 'tenant.json';
 export const GUIDE_FILE = 'custom_tenant_id.html';
 
-function isDefaults(cfg: TenantConfig): boolean {
-    return cfg.clientId === DEFAULT_CLIENT_ID && cfg.tenantId === DEFAULT_TENANT_ID;
+function isDefaults(tenantConfig: TenantConfig): boolean {
+    return tenantConfig.clientId === DEFAULT_CLIENT_ID && tenantConfig.tenantId === DEFAULT_TENANT_ID;
 }
 
-async function writeTenantJson(file: string, cfg: TenantConfig): Promise<void> {
-    const data = {
-        clientId: cfg.clientId,
-        tenantId: cfg.tenantId,
+async function writeTenantJson(file: string, tenantConfig: TenantConfig): Promise<void> {
+    const fileContents = {
+        clientId: tenantConfig.clientId,
+        tenantId: tenantConfig.tenantId,
         _instructions:
             `To use your own Azure AD app registration, replace "clientId" and "tenantId" ` +
             `above with your values, then re-run 'teams-org extract' in this folder. ` +
             `See ${GUIDE_FILE} for a full step-by-step guide.`,
     };
-    await Bun.write(file, JSON.stringify(data, null, 2) + '\n');
+    await Bun.write(file, JSON.stringify(fileContents, null, 2) + '\n');
 }
 
 async function readTenantJson(file: string): Promise<TenantConfig> {
-    const json = JSON.parse(await Bun.file(file).text());
-    const clientId = typeof json.clientId === 'string' && json.clientId.trim() ? json.clientId.trim() : DEFAULT_CLIENT_ID;
-    const tenantId = typeof json.tenantId === 'string' && json.tenantId.trim() ? json.tenantId.trim() : DEFAULT_TENANT_ID;
+    const parsedJson = JSON.parse(await Bun.file(file).text());
+    const clientId =
+        typeof parsedJson.clientId === 'string' && parsedJson.clientId.trim()
+            ? parsedJson.clientId.trim()
+            : DEFAULT_CLIENT_ID;
+    const tenantId =
+        typeof parsedJson.tenantId === 'string' && parsedJson.tenantId.trim()
+            ? parsedJson.tenantId.trim()
+            : DEFAULT_TENANT_ID;
     return { clientId, tenantId };
 }
 
@@ -42,35 +48,45 @@ async function readTenantJson(file: string): Promise<TenantConfig> {
  */
 export async function resolveTenantConfig(
     folder: string,
-    opts: { yes?: boolean; cliClientId: string; cliTenantId: string }
+    options: { yes?: boolean; cliClientId: string; cliTenantId: string }
 ): Promise<TenantConfig | null> {
     const tenantPath = path.join(folder, TENANT_FILE);
     const guidePath = path.join(folder, GUIDE_FILE);
-    const explicitCustom = opts.cliClientId !== DEFAULT_CLIENT_ID || opts.cliTenantId !== DEFAULT_TENANT_ID;
-    const exists = await Bun.file(tenantPath).exists();
+    const hasExplicitCustomIds =
+        options.cliClientId !== DEFAULT_CLIENT_ID || options.cliTenantId !== DEFAULT_TENANT_ID;
+    const tenantFileExists = await Bun.file(tenantPath).exists();
+
+    // An explicit --client-id/--tenant-id (or CLIENT_ID/TENANT_ID env) always wins,
+    // even on a re-run: persist it and use it so the flag is never silently ignored.
+    if (hasExplicitCustomIds) {
+        const explicitConfig: TenantConfig = { clientId: options.cliClientId, tenantId: options.cliTenantId };
+        await writeTenantJson(tenantPath, explicitConfig);
+        console.log(`🔑 Using IDs from the command line (tenant: ${explicitConfig.tenantId}); saved to ${tenantPath}.\n`);
+        return explicitConfig;
+    }
 
     // ---- Re-run: a tenant.json already exists ----
-    if (exists) {
-        let cfg: TenantConfig;
+    if (tenantFileExists) {
+        let tenantConfig: TenantConfig;
         try {
-            cfg = await readTenantJson(tenantPath);
+            tenantConfig = await readTenantJson(tenantPath);
         } catch {
             console.error(`\n❌ Could not parse ${tenantPath}. Please fix the JSON (or delete the file) and try again.`);
             return null;
         }
 
-        if (!isDefaults(cfg)) {
-            console.log(`🔑 Using custom IDs from ${TENANT_FILE} (tenant: ${cfg.tenantId}).\n`);
-            return cfg;
+        if (!isDefaults(tenantConfig)) {
+            console.log(`🔑 Using custom IDs from ${TENANT_FILE} (tenant: ${tenantConfig.tenantId}).\n`);
+            return tenantConfig;
         }
 
         // Values are still the defaults.
-        if (opts.yes) return cfg;
+        if (options.yes) return tenantConfig;
         const useDefaults = await confirm({
             message: `${TENANT_FILE} still contains the default Microsoft app registration. Use the defaults?`,
             default: true,
         });
-        if (useDefaults) return cfg;
+        if (useDefaults) return tenantConfig;
 
         // User wants their own IDs — make sure the guide is present and stop.
         await writeGuide(guidePath);
@@ -81,26 +97,18 @@ export async function resolveTenantConfig(
     }
 
     // ---- First run: no tenant.json yet ----
-    // Honor explicit --client-id/--tenant-id (or env) by persisting and using them.
-    if (explicitCustom) {
-        const cfg: TenantConfig = { clientId: opts.cliClientId, tenantId: opts.cliTenantId };
-        await writeTenantJson(tenantPath, cfg);
-        console.log(`🔑 Saved custom IDs to ${tenantPath} (tenant: ${cfg.tenantId}).\n`);
-        return cfg;
-    }
-
     // Seed tenant.json with the defaults so it can be edited later.
-    const defaults: TenantConfig = { clientId: DEFAULT_CLIENT_ID, tenantId: DEFAULT_TENANT_ID };
-    await writeTenantJson(tenantPath, defaults);
+    const defaultConfig: TenantConfig = { clientId: DEFAULT_CLIENT_ID, tenantId: DEFAULT_TENANT_ID };
+    await writeTenantJson(tenantPath, defaultConfig);
     console.log(`🗂️  Created ${tenantPath} with the default Microsoft app registration.`);
 
-    if (opts.yes) return defaults;
+    if (options.yes) return defaultConfig;
 
     const wantCustom = await confirm({
         message: 'Do you want to use your own client ID and tenant ID (a custom Azure AD app registration)?',
         default: false,
     });
-    if (!wantCustom) return defaults;
+    if (!wantCustom) return defaultConfig;
 
     // User wants custom IDs — write the guide and stop so they can edit tenant.json.
     await writeGuide(guidePath);

@@ -2,6 +2,7 @@
   "name": "msteams-org-tree",
   "module": "index.ts",
   "type": "module",
+  "version": "1.0.0",
   "private": true,
   "bin": {
     "teams-org": "./bin/cli.ts"

@@ -3,9 +3,9 @@
 A fast, Typescript/Bun-based script that extracts the organization tree from Microsoft Teams (Entra ID) using the Microsoft Graph API and generates a beautiful, interactive D3.js visualization.
 
 ## Features
-- **Device Code Flow Authentication**: Securely authenticates users without storing passwords.
-- **Deep Graph API Integration**: Automatically resolves managers and fetches high-quality profile pictures encoded directly to Base64.
-- **Interactive Visualization**: Uses `d3-org-chart` to render an aesthetic, self-contained interactive web UI for exploring the organizational hierarchy.
+- **Interactive Browser Sign-In**: Signs in through your system browser by default (no passwords stored); a device-code flow is available via `--device-code` for headless machines.
+- **Deep Graph API Integration**: Automatically resolves managers and fetches profile-picture thumbnails encoded directly to Base64, with throttling-aware retries and silent token refresh for large tenants.
+- **Interactive Visualization**: Uses `d3-org-chart` to render an aesthetic, self-contained interactive web UI for exploring the organizational hierarchy. Front-end libraries are version-pinned and verified with Subresource Integrity.
 
 ## Prerequisites
 - **Bun**: Install [Bun](https://bun.sh/) if you haven't already (the `./setup.sh` script checks this for you).
@@ -70,8 +70,9 @@ Put these into the `tenant.json` in your extraction folder:
 }
 ```
 
-### 3. Enable the Device Code Flow (Crucial!)
-Since we are using the interactive CLI login flow, we must explicitly allow it.
+### 3. Enable public client flows (Crucial!)
+Both the interactive browser sign-in and the device-code flow are public-client
+flows, so we must explicitly allow them.
 1. On the left menu of your App Registration, click **Authentication**.
 2. Scroll all the way down to **Advanced settings**.
 3. Look for **Allow public client flows** (or "Enable the following mobile and desktop flows") and toggle it to **Yes**.
@@ -116,7 +117,8 @@ for details and how to use your own IDs via `tenant.json`.
    - Create/read `tenant.json` in that folder and, on a fresh folder, ask whether
      you want to use custom client/tenant IDs (see
      [Authentication](#authentication-client-id--tenant-id)).
-   - Authenticate via the device-code flow and download the whole org.
+   - Authenticate through your browser (interactive sign-in by default; pass
+     `--device-code` for the device-code flow) and download the whole org.
    - Write these files into the chosen folder:
      - `tenant.json` — the client/tenant IDs used for this folder.
      - `org_tree.json` — the readable hierarchy (no image blobs).
@@ -134,7 +136,20 @@ teams-org extract --folder ./my-org      # choose output folder non-interactivel
 teams-org extract --yes                  # accept all defaults, no prompts
 teams-org extract --no-photos            # skip profile pictures
 teams-org extract --no-inline            # keep CDN <script> links (smaller file, needs internet)
+teams-org extract --device-code          # use the device-code flow instead of the browser
 teams-org extract --tenant-id <id> --client-id <id>   # use your own app registration
+```
+
+### Rebuilding without re-downloading
+
+Already have an extraction and just want a fresh `index.html` (for example after
+pulling a new template)? Use `update` — it reuses the existing `org_tree.json`
+and `photos.json` in the folder and skips authentication and downloading:
+
+```bash
+teams-org update                 # rebuild index.html in the current folder
+teams-org update --folder ./my-org
+teams-org update --no-inline     # keep CDN <script> links instead of inlining
 ```
 
 ### Viewing the raw JSON (dev mode)
