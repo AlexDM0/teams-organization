@@ -48,12 +48,39 @@
             color: white;
             position: relative;
             overflow: visible;
+            cursor: pointer;
         }
         
         .node-card:hover {
             transform: translateY(-4px);
             border-color: rgba(99, 102, 241, 0.6);
             background: #27364f;
+        }
+
+        /* Category grouping cards (Organization, Uncategorized, Externals) are
+           structural containers, not real people — style them distinctly so they
+           read as sections rather than staff. */
+        .node-card.category-card {
+            background: linear-gradient(135deg, #312e81, #1e1b4b);
+            border: 1px dashed rgba(129, 140, 248, 0.55);
+        }
+
+        .node-card.category-card:hover {
+            background: linear-gradient(135deg, #3730a3, #1e1b4b);
+            border-color: rgba(129, 140, 248, 0.85);
+        }
+
+        .node-card.category-card .node-image {
+            border-radius: 14px;
+            border-color: #818cf8;
+            background: linear-gradient(135deg, #4f46e5, #312e81);
+            color: #e0e7ff;
+        }
+
+        .node-card.category-card .node-name {
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #c7d2fe;
         }
 
         .node-image {
@@ -65,7 +92,7 @@
             border-radius: 50%;
             object-fit: cover;
             border: 2px solid #6366f1;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             background: linear-gradient(135deg, #334155, #1e293b);
             display: flex;
             align-items: center;
@@ -94,7 +121,7 @@
         .node-position {
             font-size: 12px;
             color: #94a3b8;
-            margin: 0 0 12px 0;
+            margin: 0 0 8px 0;
             text-align: center;
             font-weight: 500;
             text-transform: uppercase;
@@ -119,18 +146,6 @@
             background: rgba(15, 23, 42, 0.7);
         }
 
-        .node-detail-more {
-            font-size: 10px;
-            color: #818cf8;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding-top: 2px;
-        }
-        
         .node-detail-item {
             display: flex;
             align-items: center;
@@ -147,22 +162,36 @@
             font-size: 12px;
         }
 
-        .badge-count {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: linear-gradient(135deg, #6366f1, #4f46e5);
-            color: white;
-            border-radius: 50%;
-            width: 26px;
-            height: 26px;
+        /* Expand / collapse button showing how many people report to a node. */
+        .expand-button {
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            gap: 5px;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            letter-spacing: 0.3px;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.45);
             border: 2px solid #1e293b;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+        }
+        .expand-button:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.65);
+            filter: brightness(1.08);
+        }
+        .expand-button-chevron {
+            font-size: 9px;
+            line-height: 1;
+            opacity: 0.85;
         }
         
         .loading {
@@ -192,12 +221,29 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Search Bar Styles */
-        .search-container {
+        /* Top control bars */
+        .controls-left {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 100;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .controls-right {
             position: absolute;
             top: 24px;
             right: 24px;
             z-index: 100;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        /* Search Bar Styles */
+        .search-container {
+            position: relative;
             width: 320px;
         }
         .search-input {
@@ -264,16 +310,84 @@
         
         .node-card.highlighted {
             border-color: #38bdf8;
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
-            background: #203554;
+            border-width: 2px;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.55), 0 0 28px 6px rgba(56, 189, 248, 0.55);
+            background: #24476b;
+        }
+
+        /* d3-org-chart outlines the whole node cell when a node is highlighted, which
+           looks like it hugs the empty area around the card. Hide that outline so only
+           the card itself (via .node-card.highlighted) shows the highlight. */
+        #chart-container .node-rect {
+            stroke: transparent !important;
         }
 
         /* Settings cogwheel */
         .settings-container {
-            position: absolute;
-            top: 24px;
-            left: 24px;
-            z-index: 100;
+            position: relative;
+        }
+        .collapse-btn {
+            height: 44px;
+            padding: 0 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+        .collapse-btn:hover {
+            border-color: #6366f1;
+            background: #27364f;
+        }
+        .collapse-btn-icon {
+            font-size: 15px;
+            line-height: 1;
+        }
+        /* Segmented control to switch the org-chart growth direction. */
+        .direction-toggle {
+            display: flex;
+            height: 44px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        .direction-btn {
+            width: 40px;
+            border: none;
+            border-right: 1px solid rgba(255,255,255,0.08);
+            background: transparent;
+            color: #94a3b8;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .direction-btn:last-child {
+            border-right: none;
+        }
+        .direction-btn:hover {
+            background: #27364f;
+            color: #e2e8f0;
+        }
+        .direction-btn.active {
+            background: #6366f1;
+            color: #ffffff;
         }
         .settings-btn {
             width: 44px;
@@ -298,7 +412,7 @@
         .settings-panel {
             position: absolute;
             top: calc(100% + 8px);
-            left: 0;
+            right: 0;
             width: 260px;
             background: rgba(30, 41, 59, 0.97);
             backdrop-filter: blur(10px);
@@ -353,6 +467,126 @@
         }
         .settings-option-icon {
             opacity: 0.75;
+        }
+
+        /* Filter panel */
+        .filter-container {
+            position: relative;
+        }
+        .filter-count-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .filter-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+            background: rgba(30, 41, 59, 0.97);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+            padding: 14px;
+            display: none;
+            box-sizing: border-box;
+        }
+        .filter-panel.active {
+            display: block;
+        }
+        .filter-category {
+            margin-bottom: 14px;
+        }
+        .filter-category-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+        }
+        .filter-select {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(15, 23, 42, 0.7);
+            color: #e2e8f0;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            cursor: pointer;
+        }
+        .filter-select:focus {
+            border-color: #6366f1;
+        }
+        .filter-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .filter-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px 4px 10px;
+            border-radius: 999px;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.45);
+            color: #e2e8f0;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        .filter-tag-remove {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.12);
+            color: #e2e8f0;
+            font-size: 10px;
+            cursor: pointer;
+            padding: 0;
+            transition: background 0.15s;
+        }
+        .filter-tag-remove:hover {
+            background: #ef4444;
+        }
+        .filter-clear {
+            width: 100%;
+            padding: 9px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(15, 23, 42, 0.7);
+            color: #cbd5e1;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .filter-clear:hover {
+            border-color: #ef4444;
+            color: #fecaca;
+        }
+        .filter-empty {
+            font-size: 12px;
+            color: #94a3b8;
         }
 
         /* Contact overlay */
@@ -465,20 +699,226 @@
             font-size: 13px;
             padding: 8px 4px;
         }
+
+        /* Theme toggle button (matches the settings button, without the rotate). */
+        .theme-toggle {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            color: #cbd5e1;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+        }
+        .theme-toggle:hover {
+            border-color: #6366f1;
+            background: #27364f;
+        }
+
+        /* -------------------------------------------------------------------
+           Light theme. The dark theme above is the default and is left fully
+           intact; this block only overrides colours when body.light-theme is
+           set. Category cards, the indigo accent buttons, and the report-count
+           bubble keep their indigo styling, which reads well on both themes.
+        ------------------------------------------------------------------- */
+        body.light-theme {
+            background-color: #eef2f7;
+            color: #0f172a;
+            background-image:
+                radial-gradient(at 0% 0%, hsla(210,40%,96%,1) 0, transparent 50%),
+                radial-gradient(at 50% 0%, hsla(225,60%,88%,0.35) 0, transparent 50%),
+                radial-gradient(at 100% 0%, hsla(339,60%,90%,0.25) 0, transparent 50%);
+        }
+        body.light-theme .node-card {
+            background: #ffffff;
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
+            color: #0f172a;
+        }
+        body.light-theme .node-card:hover {
+            background: #f8fafc;
+            border-color: rgba(99, 102, 241, 0.6);
+        }
+        body.light-theme .node-image {
+            background: linear-gradient(135deg, #e2e8f0, #f1f5f9);
+            color: #6366f1;
+        }
+        body.light-theme .node-position {
+            color: #64748b;
+        }
+        body.light-theme .node-details {
+            background: rgba(15, 23, 42, 0.05);
+            color: #475569;
+        }
+        body.light-theme .node-details:hover {
+            background: rgba(15, 23, 42, 0.09);
+        }
+        body.light-theme .node-card.highlighted {
+            border-color: #0284c7;
+            background: #e0f2fe;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.35), 0 0 28px 6px rgba(56, 189, 248, 0.45);
+        }
+        body.light-theme .theme-toggle,
+        body.light-theme .collapse-btn,
+        body.light-theme .settings-btn {
+            background: rgba(255, 255, 255, 0.85);
+            border-color: rgba(15, 23, 42, 0.1);
+            color: #334155;
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
+        }
+        body.light-theme .theme-toggle:hover,
+        body.light-theme .collapse-btn:hover {
+            background: #f1f5f9;
+            border-color: #6366f1;
+        }
+        body.light-theme .search-input {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(15, 23, 42, 0.12);
+            color: #0f172a;
+        }
+        body.light-theme .search-input::placeholder {
+            color: #64748b;
+        }
+        body.light-theme .search-results {
+            background: rgba(255, 255, 255, 0.97);
+            border-color: rgba(15, 23, 42, 0.1);
+        }
+        body.light-theme .search-result-item {
+            border-bottom-color: rgba(15, 23, 42, 0.06);
+        }
+        body.light-theme .result-role {
+            color: #64748b;
+        }
+        body.light-theme .direction-toggle {
+            background: rgba(255, 255, 255, 0.85);
+            border-color: rgba(15, 23, 42, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1);
+        }
+        body.light-theme .direction-btn {
+            color: #64748b;
+            border-right-color: rgba(15, 23, 42, 0.08);
+        }
+        body.light-theme .direction-btn:hover {
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+        body.light-theme .settings-panel,
+        body.light-theme .filter-panel {
+            background: rgba(255, 255, 255, 0.98);
+            border-color: rgba(15, 23, 42, 0.1);
+        }
+        body.light-theme .settings-title,
+        body.light-theme .filter-category-label {
+            color: #1e293b;
+        }
+        body.light-theme .settings-hint,
+        body.light-theme .filter-empty {
+            color: #64748b;
+        }
+        body.light-theme .settings-option {
+            color: #475569;
+        }
+        body.light-theme .filter-select,
+        body.light-theme .filter-clear {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(15, 23, 42, 0.12);
+            color: #475569;
+        }
+        body.light-theme .filter-tag {
+            background: rgba(99, 102, 241, 0.12);
+            border-color: rgba(99, 102, 241, 0.4);
+            color: #3730a3;
+        }
+        body.light-theme .filter-tag-remove {
+            background: rgba(15, 23, 42, 0.12);
+            color: #334155;
+        }
+        body.light-theme .contact-overlay {
+            background: rgba(15, 23, 42, 0.35);
+        }
+        body.light-theme .contact-modal {
+            background: #ffffff;
+            border-color: rgba(15, 23, 42, 0.1);
+            box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.25);
+            color: #0f172a;
+        }
+        body.light-theme .contact-close {
+            background: rgba(15, 23, 42, 0.06);
+            color: #475569;
+        }
+        body.light-theme .contact-close:hover {
+            background: rgba(15, 23, 42, 0.12);
+        }
+        body.light-theme .contact-name {
+            color: #0f172a;
+        }
+        body.light-theme .contact-position,
+        body.light-theme .contact-row-label,
+        body.light-theme .contact-empty {
+            color: #64748b;
+        }
+        body.light-theme .contact-row {
+            border-top-color: rgba(15, 23, 42, 0.08);
+            color: #334155;
+        }
     </style>
 </head>
 <body>
-    <div class="settings-container">
-        <button id="settings-btn" class="settings-btn" title="Choose card fields">⚙️</button>
-        <div id="settings-panel" class="settings-panel">
-            <div class="settings-title">Card fields</div>
-            <div class="settings-hint">Pick up to 3 fields to show on each card.</div>
-            <div id="settings-options"></div>
+    <script>
+        // Apply the saved theme before the page paints so there is no dark→light
+        // flash on load. Dark is the default; only light needs an explicit class.
+        (function () {
+            try {
+                if (localStorage.getItem('teamsOrg.theme') === 'light') {
+                    document.body.classList.add('light-theme');
+                }
+            } catch (error) { /* localStorage may be unavailable (e.g. file:// privacy) */ }
+        })();
+    </script>
+    <div class="controls-left">
+        <button id="collapse-btn" class="collapse-btn" title="Collapse the whole tree">
+            <span class="collapse-btn-icon">⊟</span> Collapse all
+        </button>
+        <div class="filter-container">
+            <button id="filter-btn" class="collapse-btn" title="Filter people by their details">
+                <span class="collapse-btn-icon">⛃</span> Filter
+                <span id="filter-count-badge" class="filter-count-badge" style="display:none;">0</span>
+            </button>
+            <div id="filter-panel" class="filter-panel">
+                <div class="settings-title">Filter people</div>
+                <div class="settings-hint">Add values to narrow the tree. Matching people and their managers stay visible.</div>
+                <div id="filter-categories"></div>
+                <button id="filter-clear" class="filter-clear">Clear all filters</button>
+            </div>
+        </div>
+        <div id="direction-toggle" class="direction-toggle" title="Layout direction">
+            <button class="direction-btn active" data-direction="top" title="Top-down">⬇</button>
+            <button class="direction-btn" data-direction="bottom" title="Bottom-up">⬆</button>
+            <button class="direction-btn" data-direction="left" title="Left-to-right">➡</button>
+            <button class="direction-btn" data-direction="right" title="Right-to-left">⬅</button>
         </div>
     </div>
-    <div class="search-container">
-        <input type="text" id="search-input" class="search-input" placeholder="Search employees or roles..." autocomplete="off">
-        <div id="search-results" class="search-results"></div>
+    <div class="controls-right">
+        <button id="theme-toggle-btn" class="theme-toggle" title="Toggle light / dark theme">🌙</button>
+        <div class="search-container">
+            <input type="text" id="search-input" class="search-input" placeholder="Search name, role, location..." autocomplete="off">
+            <div id="search-results" class="search-results"></div>
+        </div>
+        <div class="settings-container">
+            <button id="settings-btn" class="settings-btn" title="Choose card fields">⚙️</button>
+            <div id="settings-panel" class="settings-panel">
+                <div class="settings-title">Card fields</div>
+                <div class="settings-hint">Pick up to 3 fields to show on each card.</div>
+                <div id="settings-options"></div>
+            </div>
+        </div>
     </div>
     <div id="contact-overlay" class="contact-overlay">
         <div class="contact-modal">
@@ -548,9 +988,38 @@
                             if (validFields.length) return validFields;
                         }
                     } catch (error) { /* ignore malformed stored value */ }
-                    return ['email', 'role', 'mobilePhone'];
+                    return ['companyName', 'role', 'officeLocation'];
                 }
                 let selectedCardFields = loadSelectedCardFields();
+
+                // The wrapper adds this much space above every card; the node cell height is
+                // sized to the card plus this so the report-count bubble lands on the card's
+                // bottom edge (see nodeHeight / buttonY below).
+                const CARD_WRAPPER_TOP_PADDING = 15;
+                // The count bubble is 32px tall; the card's padding is half of that so the
+                // bubble's upper half tucks neatly into the padding without covering content.
+                const REPORT_BUBBLE_HEIGHT = 32;
+
+                // How many of the chosen card fields actually have a value for this person.
+                function countVisibleCardFields(person) {
+                    return selectedCardFields
+                        .map(key => FIELD_DEFINITION_BY_KEY[key])
+                        .filter(Boolean)
+                        .filter(field => field.get(person))
+                        .length;
+                }
+
+                // Card height grows with the number of visible detail rows so short cards
+                // don't leave empty space and full cards keep their bottom padding.
+                function computeCardHeight(person) {
+                    const CARD_BASE_HEIGHT = 150;      // avatar + name + title + top/bottom padding
+                    const DETAILS_BOX_PADDING = 16;    // the details box's own top + bottom padding
+                    const DETAIL_ROW_HEIGHT = 23;      // one detail line including its gap
+                    const visibleFieldCount = countVisibleCardFields(person);
+                    return visibleFieldCount === 0
+                        ? CARD_BASE_HEIGHT
+                        : CARD_BASE_HEIGHT + DETAILS_BOX_PADDING + visibleFieldCount * DETAIL_ROW_HEIGHT;
+                }
 
                 const escapeHtml = (value) => String(value == null ? '' : value)
                     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -665,20 +1134,51 @@
                 }
 
                 // Sort so people with more direct reports appear first (at the top/left of branches).
-                peopleList.sort((first, second) => second.directReportCount - first.directReportCount);
+                // The synthetic "Uncategorized" and "Externals" groups are always pushed to the end
+                // of their sibling list, regardless of how many members they contain.
+                const GROUP_NODE_IDS = new Set(["UNCATEGORIZED", "EXTERN"]);
+                peopleList.sort((first, second) => {
+                    const firstIsGroup = GROUP_NODE_IDS.has(first.id);
+                    const secondIsGroup = GROUP_NODE_IDS.has(second.id);
+                    if (firstIsGroup !== secondIsGroup) return firstIsGroup ? 1 : -1;
+                    return second.directReportCount - first.directReportCount;
+                });
 
                 window.highlightedNodeId = null;
 
                 const chart = new d3.OrgChart()
                     .container('#chart-container')
                     .data(peopleList)
+                    // Fill the whole window (the library only auto-tracks width on render,
+                    // so height is set explicitly here and kept in sync on resize below).
+                    .svgHeight(window.innerHeight)
+                    .svgWidth(window.innerWidth)
                     .nodeWidth(() => 260)
-                    .nodeHeight(() => 240)
+                    // Size the node cell to the card plus the wrapper padding so the node's
+                    // bottom edge is the card's bottom edge — that's where the count bubble sits.
+                    .nodeHeight((node) => CARD_WRAPPER_TOP_PADDING + computeCardHeight(node.data))
                     .childrenMargin(() => 50)
                     .compactMarginBetween(() => 40)
                     .compactMarginPair(() => 40)
+                    // Larger, on-brand expand/collapse button showing the report count.
+                    // Its height matches REPORT_BUBBLE_HEIGHT and the -Y offset is half of
+                    // that, so the bubble's centre sits exactly on the card's bottom edge.
+                    .nodeButtonWidth(() => 58)
+                    .nodeButtonHeight(() => REPORT_BUBBLE_HEIGHT)
+                    .nodeButtonX(() => -29)
+                    .nodeButtonY(() => -REPORT_BUBBLE_HEIGHT / 2)
+                    .buttonContent(({ node }) => {
+                        const isExpanded = Boolean(node.children);
+                        const reportCount = node.data._directSubordinatesPaging;
+                        const label = `${isExpanded ? 'Collapse' : 'Expand'} ${reportCount} report${reportCount === 1 ? '' : 's'}`;
+                        return `<div class="expand-button" title="${label}">
+                            <span>${reportCount}</span>
+                            <span class="expand-button-chevron">${isExpanded ? '▲' : '▼'}</span>
+                        </div>`;
+                    })
                     // Expand two levels by default so the structure is visible without
-                    // expanding the whole (potentially huge) org up front.
+                    // expanding the whole (potentially huge) org up front. The synthetic
+                    // Uncategorized/Externals groups are folded away again after render.
                     .initialExpandLevel(2)
                     .linkUpdate(function (linkData, linkIndex, linkElements) {
                         d3.select(this)
@@ -687,43 +1187,105 @@
                     })
                     .nodeContent(function (chartNode, nodeIndex, allNodes, chartState) {
                         const person = chartNode.data;
-                        const hasDirectReports = person.directReportCount > 0;
                         const photoDataUrl = photos[person.id];
+                        const CATEGORY_NODE_ICONS = { ROOT: "🏢", UNCATEGORIZED: "❔", EXTERN: "🤝" };
+                        const isCategoryNode = Object.prototype.hasOwnProperty.call(CATEGORY_NODE_ICONS, person.id);
                         const avatarMarkup = photoDataUrl
                             ? `<img class="node-image" loading="lazy" src="${photoDataUrl}" />`
-                            : `<div class="node-image">${escapeHtml(person.name.charAt(0))}</div>`;
+                            : `<div class="node-image">${isCategoryNode ? CATEGORY_NODE_ICONS[person.id] : escapeHtml(person.name.charAt(0))}</div>`;
 
-                        const isHighlighted = person.id === window.highlightedNodeId;
+                        // Highlight the searched node and its path to the root — the
+                        // library sets these flags via setUpToTheRootHighlighted().
+                        const isHighlighted = chartNode.data._highlighted
+                            || chartNode.data._upToTheRootHighlighted
+                            || person.id === window.highlightedNodeId;
 
-                        return `
-                            <div style="padding-top: 15px; height: 100%;">
-                                <div class="node-card ${isHighlighted ? 'highlighted' : ''}" style="height: 220px; width: 260px;">
-                                    ${hasDirectReports ? `<div class="badge-count">${person.directReportCount}</div>` : ''}
-                                    ${avatarMarkup}
-                                    <div class="node-name" title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</div>
-                                    <div class="node-position" title="${escapeHtml(person.position)}">${escapeHtml(person.position || '')}</div>
-                                    <div class="node-details" onclick="event.stopPropagation(); window.showContact('${person.id}')" title="Click for full contact info">
-                                        ${selectedCardFields
-                                            .map(key => FIELD_DEFINITION_BY_KEY[key])
-                                            .filter(Boolean)
-                                            .map(field => ({ icon: field.icon, value: field.get(person) }))
-                                            .filter(entry => entry.value)
-                                            .map(entry => `
+                        // Only the fields that actually have a value are shown, so a
+                        // person lacking data gets a shorter card instead of empty space.
+                        const detailEntries = selectedCardFields
+                            .map(key => FIELD_DEFINITION_BY_KEY[key])
+                            .filter(Boolean)
+                            .map(field => ({ icon: field.icon, value: field.get(person) }))
+                            .filter(entry => entry.value);
+
+                        const cardHeight = computeCardHeight(person);
+
+                        const detailsMarkup = detailEntries.length
+                            ? `<div class="node-details">
+                                        ${detailEntries.map(entry => `
                                         <div class="node-detail-item" title="${escapeHtml(entry.value)}">
                                             <span class="node-detail-icon">${entry.icon}</span> ${escapeHtml(entry.value)}
                                         </div>`).join('')}
-                                        <div class="node-detail-more">👤 View contact</div>
-                                    </div>
+                                    </div>`
+                            : '';
+
+                        return `
+                            <div style="padding-top: ${CARD_WRAPPER_TOP_PADDING}px; height: 100%;">
+                                <div class="node-card ${isCategoryNode ? 'category-card' : ''} ${isHighlighted ? 'highlighted' : ''}" style="height: ${cardHeight}px; width: 260px;"
+                                    onclick="window.showContact('${person.id}')" title="Click for full contact info">
+                                    ${avatarMarkup}
+                                    <div class="node-name" title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</div>
+                                    <div class="node-position" title="${escapeHtml(person.position)}">${escapeHtml(person.position || '')}</div>
+                                    ${detailsMarkup}
                                 </div>
                             </div>
                         `;
                     })
                     .render();
 
+                // The full, unfiltered set of people is the source of truth; filtering
+                // renders a subset of this array while search always looks at all people.
+                const allPeople = peopleList;
+                const SYNTHETIC_NODE_IDS = new Set(['ROOT', 'UNCATEGORIZED', 'EXTERN']);
+                const isSyntheticNode = (person) => SYNTHETIC_NODE_IDS.has(person.id);
+                const peopleById = new Map(allPeople.map(person => [person.id, person]));
+
+                // Collapse the synthetic "Uncategorized" and "Externals" groups. The default
+                // view expands two levels, which flags the groups' members as expanded too;
+                // the library would then re-expand a group to reveal any flagged descendant, so
+                // we must clear the flag on the group AND its whole subtree to keep it folded.
+                function collapseSyntheticGroups() {
+                    ['UNCATEGORIZED', 'EXTERN'].forEach(groupId => {
+                        const groupNode = peopleById.get(groupId);
+                        if (groupNode) groupNode._expanded = false;
+                        const descendantStack = [groupId];
+                        while (descendantStack.length) {
+                            const currentId = descendantStack.pop();
+                            allPeople.forEach(person => {
+                                if (person.parentId === currentId) {
+                                    person._expanded = false;
+                                    descendantStack.push(person.id);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                // Default view: expand two levels, then fold the synthetic groups away so
+                // Uncategorized/Externals stay collapsed even though the rest is expanded.
+                function showDefaultView() {
+                    allPeople.forEach(person => { delete person._expanded; });
+                    chart.data(allPeople).initialExpandLevel(2).render();
+                    collapseSyntheticGroups();
+                    chart.render();
+                    chart.fit();
+                }
+
+                // Filtered view: show only the matching people plus their managers, fully
+                // expanded so every match is visible.
+                function showFilteredView(filteredPeople) {
+                    filteredPeople.forEach(person => { person._expanded = true; });
+                    chart.data(filteredPeople).initialExpandLevel(1).render();
+                    chart.fit();
+                }
+
+                collapseSyntheticGroups();
+                chart.render();
+
                 // ---- Contact overlay ----
                 const overlay = document.getElementById('contact-overlay');
                 window.showContact = function (personId) {
-                    const person = peopleList.find(candidate => candidate.id === personId);
+                    const person = peopleById.get(personId);
                     if (!person) return;
 
                     const avatar = document.getElementById('contact-avatar');
@@ -815,11 +1377,245 @@
                 });
                 renderSettingsOptions();
 
-                const fuzzySearch = new Fuse(peopleList, {
-                    keys: ['name', 'role', 'position', 'email'],
-                    threshold: 0.3,
-                    distance: 100
+                // ---- Light / dark theme toggle ----
+                const themeToggleButton = document.getElementById('theme-toggle-btn');
+                function syncThemeToggle() {
+                    const isLight = document.body.classList.contains('light-theme');
+                    themeToggleButton.textContent = isLight ? '☀️' : '🌙';
+                    themeToggleButton.title = isLight ? 'Switch to dark theme' : 'Switch to light theme';
+                }
+                themeToggleButton.addEventListener('click', () => {
+                    const isLight = document.body.classList.toggle('light-theme');
+                    try {
+                        localStorage.setItem('teamsOrg.theme', isLight ? 'light' : 'dark');
+                    } catch (error) { /* ignore unavailable storage */ }
+                    syncThemeToggle();
                 });
+                syncThemeToggle();
+
+                // Collapse the tree but keep the top "Organization" node expanded so its
+                // direct children stay visible.
+                const collapseButton = document.getElementById('collapse-btn');
+                collapseButton.addEventListener('click', () => {
+                    window.highlightedNodeId = null;
+                    chart.clearHighlighting();
+                    const rootPerson = chart.getChartState().data.find(person => !person.parentId);
+                    chart.getChartState().data.forEach(person => {
+                        person._expanded = rootPerson ? person.id === rootPerson.id : false;
+                    });
+                    chart.initialExpandLevel(1).render();
+                    chart.fit();
+                });
+
+                // ---- Layout direction toggle (top / bottom / left / right) ----
+                const directionToggle = document.getElementById('direction-toggle');
+                directionToggle.addEventListener('click', (event) => {
+                    const button = event.target.closest('.direction-btn');
+                    if (!button) return;
+                    const direction = button.dataset.direction;
+                    directionToggle.querySelectorAll('.direction-btn').forEach(other => {
+                        other.classList.toggle('active', other === button);
+                    });
+                    chart.layout(direction).render().fit();
+                });
+
+                // ---- Filter panel: narrow the tree by any categorical detail ----
+                // Every datapoint except name, email, phone numbers and employee id can be
+                // filtered. Options are built from the data, so only values that actually
+                // occur show up.
+                const FILTER_CATEGORIES = [
+                    { key: 'position', label: 'Title', get: person => person.position },
+                    { key: 'role', label: 'Department', get: person => person.role },
+                    { key: 'companyName', label: 'Company', get: person => person.companyName },
+                    { key: 'officeLocation', label: 'Office', get: person => person.officeLocation },
+                    { key: 'city', label: 'City', get: person => person.city },
+                    { key: 'state', label: 'State / Region', get: person => person.state },
+                    { key: 'country', label: 'Country', get: person => person.country },
+                ];
+
+                // Distinct, sorted values per category (excluding the synthetic group nodes).
+                const distinctValuesByCategory = new Map();
+                for (const category of FILTER_CATEGORIES) {
+                    const values = new Set();
+                    for (const person of allPeople) {
+                        if (isSyntheticNode(person)) continue;
+                        const value = category.get(person);
+                        if (value) values.add(value);
+                    }
+                    if (values.size > 0) {
+                        distinctValuesByCategory.set(category.key, [...values].sort((first, second) => first.localeCompare(second)));
+                    }
+                }
+                // Only offer categories that actually have values in this organization.
+                const availableFilterCategories = FILTER_CATEGORIES.filter(category => distinctValuesByCategory.has(category.key));
+
+                // category key -> Set of selected values.
+                const activeFilters = new Map();
+
+                const filterButton = document.getElementById('filter-btn');
+                const filterPanel = document.getElementById('filter-panel');
+                const filterCategoriesContainer = document.getElementById('filter-categories');
+                const filterCountBadge = document.getElementById('filter-count-badge');
+                const filterClearButton = document.getElementById('filter-clear');
+
+                function countSelectedFilters() {
+                    let total = 0;
+                    for (const values of activeFilters.values()) total += values.size;
+                    return total;
+                }
+
+                function renderFilterCategories() {
+                    if (availableFilterCategories.length === 0) {
+                        filterCategoriesContainer.innerHTML = '<div class="filter-empty">No filterable details are available.</div>';
+                        filterClearButton.style.display = 'none';
+                        return;
+                    }
+                    filterCategoriesContainer.innerHTML = availableFilterCategories.map(category => {
+                        const selectedValues = activeFilters.get(category.key) || new Set();
+                        const optionsMarkup = distinctValuesByCategory.get(category.key)
+                            .filter(value => !selectedValues.has(value))
+                            .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+                            .join('');
+                        const chipsMarkup = [...selectedValues].map(value => `
+                            <span class="filter-tag">${escapeHtml(value)}<button type="button" class="filter-tag-remove" data-category="${escapeHtml(category.key)}" data-value="${escapeHtml(value)}" title="Remove">✕</button></span>`).join('');
+                        return `
+                            <div class="filter-category">
+                                <label class="filter-category-label">${escapeHtml(category.label)}</label>
+                                <select class="filter-select" data-category="${escapeHtml(category.key)}">
+                                    <option value="">Add ${escapeHtml(category.label.toLowerCase())}…</option>
+                                    ${optionsMarkup}
+                                </select>
+                                ${chipsMarkup ? `<div class="filter-tags">${chipsMarkup}</div>` : ''}
+                            </div>`;
+                    }).join('');
+
+                    const selectedCount = countSelectedFilters();
+                    filterClearButton.style.display = selectedCount > 0 ? 'block' : 'none';
+                    if (selectedCount > 0) {
+                        filterCountBadge.textContent = String(selectedCount);
+                        filterCountBadge.style.display = 'inline-flex';
+                    } else {
+                        filterCountBadge.style.display = 'none';
+                    }
+                }
+
+                // Returns the filtered people (matches + their managers) or null when no
+                // filters are active.
+                function computeFilteredPeople() {
+                    const activeCategories = availableFilterCategories
+                        .map(category => ({ category, values: activeFilters.get(category.key) }))
+                        .filter(entry => entry.values && entry.values.size > 0);
+                    if (activeCategories.length === 0) return null;
+
+                    // A person matches when, for every active category, their value is one of
+                    // the selected tags (AND across categories, OR within a category).
+                    const personMatches = (person) => activeCategories.every(({ category, values }) => {
+                        const value = category.get(person);
+                        return value && values.has(value);
+                    });
+
+                    const keepIds = new Set();
+                    for (const person of allPeople) {
+                        if (isSyntheticNode(person)) continue;
+                        if (!personMatches(person)) continue;
+                        // Keep the match and its whole management chain so the tree stays connected.
+                        let current = person;
+                        while (current && !keepIds.has(current.id)) {
+                            keepIds.add(current.id);
+                            current = current.parentId ? peopleById.get(current.parentId) : null;
+                        }
+                    }
+                    return allPeople.filter(person => keepIds.has(person.id));
+                }
+
+                function applyFilters() {
+                    const filteredPeople = computeFilteredPeople();
+                    if (!filteredPeople) {
+                        showDefaultView();
+                    } else {
+                        showFilteredView(filteredPeople);
+                    }
+                }
+
+                filterCategoriesContainer.addEventListener('change', (event) => {
+                    const select = event.target.closest('.filter-select');
+                    if (!select || !select.value) return;
+                    const categoryKey = select.getAttribute('data-category');
+                    if (!activeFilters.has(categoryKey)) activeFilters.set(categoryKey, new Set());
+                    activeFilters.get(categoryKey).add(select.value);
+                    renderFilterCategories();
+                    applyFilters();
+                });
+
+                filterCategoriesContainer.addEventListener('click', (event) => {
+                    const removeButton = event.target.closest('.filter-tag-remove');
+                    if (!removeButton) return;
+                    const categoryKey = removeButton.getAttribute('data-category');
+                    const value = removeButton.getAttribute('data-value');
+                    const values = activeFilters.get(categoryKey);
+                    if (values) {
+                        values.delete(value);
+                        if (values.size === 0) activeFilters.delete(categoryKey);
+                    }
+                    renderFilterCategories();
+                    applyFilters();
+                });
+
+                filterClearButton.addEventListener('click', () => {
+                    activeFilters.clear();
+                    renderFilterCategories();
+                    applyFilters();
+                });
+
+                filterButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    filterPanel.classList.toggle('active');
+                });
+                document.addEventListener('click', (event) => {
+                    if (!event.target.closest('.filter-container')) {
+                        filterPanel.classList.remove('active');
+                    }
+                });
+                renderFilterCategories();
+
+                // ---- Fuzzy search (matches across every field) ----
+                // against any field (AND across terms). This lets "human rotterdam" find
+                // someone in the "Human Resources" department located in Rotterdam.
+                const SEARCHABLE_FIELDS = [
+                    'name', 'position', 'role', 'email', 'mobilePhone', 'businessPhone',
+                    'officeLocation', 'city', 'state', 'country', 'companyName', 'employeeId'
+                ];
+                const fuzzySearch = new Fuse(peopleList, {
+                    keys: SEARCHABLE_FIELDS,
+                    threshold: 0.3,
+                    ignoreLocation: true,
+                    includeScore: true
+                });
+                const personById = new Map(peopleList.map(person => [person.id, person]));
+
+                function searchPeople(query) {
+                    const terms = query.trim().split(/\s+/).filter(Boolean);
+                    if (terms.length === 0) return [];
+
+                    let matchingIds = null;
+                    const combinedScoreById = new Map();
+                    for (const term of terms) {
+                        const idsForTerm = new Set();
+                        for (const match of fuzzySearch.search(term)) {
+                            idsForTerm.add(match.item.id);
+                            combinedScoreById.set(match.item.id, (combinedScoreById.get(match.item.id) || 0) + (match.score ?? 0));
+                        }
+                        // Keep only people matched by every term so far.
+                        matchingIds = matchingIds === null
+                            ? idsForTerm
+                            : new Set([...matchingIds].filter(id => idsForTerm.has(id)));
+                        if (matchingIds.size === 0) break;
+                    }
+
+                    return [...(matchingIds || [])]
+                        .map(id => ({ item: personById.get(id), score: combinedScoreById.get(id) || 0 }))
+                        .sort((first, second) => first.score - second.score);
+                }
 
                 const searchInput = document.getElementById('search-input');
                 const searchResults = document.getElementById('search-results');
@@ -846,7 +1642,7 @@
                         return;
                     }
 
-                    const matches = fuzzySearch.search(query).slice(0, 8); // Show top 8 matches
+                    const matches = searchPeople(query).slice(0, 8); // Show top 8 matches
 
                     if (matches.length === 0) {
                         searchResults.innerHTML = '<div style="padding:12px; color:#94a3b8; font-size:13px; text-align:center;">No results found</div>';
@@ -897,13 +1693,22 @@
                     // Update state and rerender to show highlight
                     window.highlightedNodeId = nodeId;
 
+                    // If a filter is hiding the person, drop back to the full tree so the
+                    // result can actually be shown.
+                    const isRendered = chart.getChartState().data.some(person => person.id === nodeId);
+                    if (!isRendered) {
+                        activeFilters.clear();
+                        renderFilterCategories();
+                        showDefaultView();
+                    }
+
                     chart.clearHighlighting();
                     chart.setUpToTheRootHighlighted(nodeId);
                     chart.render();
 
                     // Delay centering slightly to allow expansion animation
                     setTimeout(() => {
-                        chart.center(nodeId);
+                        chart.setCentered(nodeId).render();
                     }, 300);
                 });
 
@@ -914,9 +1719,30 @@
                     }
                 });
 
+                // Intercept Cmd+F / Ctrl+F so it focuses this search box instead of the
+                // browser's native find bar (which can't see collapsed/off-screen nodes).
+                document.addEventListener('keydown', (event) => {
+                    const isFindShortcut = (event.metaKey || event.ctrlKey) && !event.altKey
+                        && (event.key === 'f' || event.key === 'F');
+                    if (!isFindShortcut) return;
+                    event.preventDefault();
+                    searchInput.focus();
+                    searchInput.select();
+                });
+
                 // Instead of expanding the entire organization (which causes massive lag for large orgs),
                 // we expand only a few levels (see initialExpandLevel) and let the user expand manually.
                 chart.fit();
+
+                // Keep the chart filling the window when it is resized (debounced so a drag
+                // doesn't trigger a re-render on every pixel).
+                let resizeTimer = null;
+                window.addEventListener('resize', () => {
+                    clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(() => {
+                        chart.svgHeight(window.innerHeight).svgWidth(window.innerWidth).render().fit();
+                    }, 150);
+                });
             })
             .catch(error => {
                 document.getElementById('loading').innerHTML = `
