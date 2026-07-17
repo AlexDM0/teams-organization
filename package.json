@@ -1,0 +1,21 @@
+{
+  "name": "msteams-org-tree",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run extract.ts",
+    "serve": "bunx serve"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^5.4.1",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "dotenv": "^17.4.2"
+  }
+}

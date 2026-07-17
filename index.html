@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization Tree</title>
+    <!-- Use Inter font for a modern look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-org-chart@3.1.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-flextree@2.1.2/build/d3-flextree.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0f172a; /* Sleek dark mode background */
+            color: #f8fafc;
+            overflow: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,0.2) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,0.1) 0, transparent 50%);
+        }
+        
+        #chart-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .node-card {
+            background: #1e293b; /* Solid color instead of transparent+blur for massive performance gain */
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            box-sizing: border-box;
+            transition: transform 0.15s ease;
+            color: white;
+            position: relative;
+            overflow: visible;
+        }
+        
+        .node-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(99, 102, 241, 0.6);
+            background: #27364f;
+        }
+
+        .node-image {
+            width: 60px;
+            height: 60px;
+            min-width: 60px;
+            min-height: 60px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #6366f1;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #334155, #1e293b);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 600;
+            color: #94a3b8;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+
+        .node-name {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            text-align: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: 0.3px;
+            line-height: 1.4;
+            padding-bottom: 2px;
+            flex-shrink: 0;
+        }
+
+        .node-position {
+            font-size: 12px;
+            color: #94a3b8;
+            margin: 0 0 12px 0;
+            text-align: center;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .node-details {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            font-size: 11px;
+            color: #cbd5e1;
+            background: rgba(15, 23, 42, 0.4);
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .node-detail-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.4;
+            padding-bottom: 2px;
+        }
+
+        .node-detail-icon {
+            opacity: 0.6;
+            font-size: 12px;
+        }
+
+        .badge-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 2px solid #1e293b;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            font-weight: 400;
+            letter-spacing: 3px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(99, 102, 241, 0.3);
+            border-radius: 50%;
+            border-top-color: #6366f1;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Search Bar Styles */
+        .search-container {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 100;
+            width: 320px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            color: white;
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+            box-sizing: border-box;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .search-input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+        .search-input::placeholder {
+            color: #94a3b8;
+        }
+        .search-results {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            width: 100%;
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+            box-sizing: border-box;
+        }
+        .search-results.active {
+            display: block;
+        }
+        .search-result-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            transition: background 0.15s;
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        .search-result-item:hover, .search-result-item.selected {
+            background: rgba(99, 102, 241, 0.25);
+        }
+        .result-name {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        .result-role {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        
+        .node-card.highlighted {
+            border-color: #38bdf8;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+            background: #203554;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <input type="text" id="search-input" class="search-input" placeholder="Search employees or roles..." autocomplete="off">
+        <div id="search-results" class="search-results"></div>
+    </div>
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        LOADING ORGANIZATION DATA
+    </div>
+    <div id="chart-container"></div>
+
+    <script>
+        fetch('org_tree.json')
+            .then(res => {
+                if (!res.ok) throw new Error("Could not load org_tree.json");
+                return res.json();
+            })
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                
+                let flatData = [];
+                function flattenTree(nodes, parentId = null) {
+                    nodes.forEach(node => {
+                        flatData.push({
+                            id: node.id,
+                            parentId: node.parentId || "", 
+                            name: node.name,
+                            position: node.position,
+                            email: node.email,
+                            role: node.role,
+                            imageUrl: node.imageUrl,
+                            _directSubordinates: node.children ? node.children.length : 0
+                        });
+                        if (node.children && node.children.length > 0) {
+                            flattenTree(node.children, node.id);
+                        }
+                    });
+                }
+                
+                flattenTree(data);
+
+                const roots = flatData.filter(d => !d.parentId);
+                if (roots.length > 1) {
+                    // Create an Uncategorized node for all isolated employees
+                    flatData.push({
+                        id: "UNCATEGORIZED",
+                        parentId: "ROOT",
+                        name: "Uncategorized",
+                        position: "Unassigned",
+                        email: "",
+                        role: "",
+                        imageUrl: null,
+                        _directSubordinates: 0
+                    });
+
+                    // Create an Extern node for external people
+                    flatData.push({
+                        id: "EXTERN",
+                        parentId: "ROOT",
+                        name: "Externals",
+                        position: "External Partners / Contractors",
+                        email: "",
+                        role: "",
+                        imageUrl: null,
+                        _directSubordinates: 0
+                    });
+
+                    let actualRootsCount = 0;
+                    let uncategorizedCount = 0;
+                    let externCount = 0;
+
+                    roots.forEach(r => {
+                        const isExtern = (r.position && r.position.toLowerCase().includes('extern')) || 
+                                         (r.role && r.role.toLowerCase().includes('extern'));
+                        
+                        const isEmployee = !r.position || r.position.trim().toLowerCase() === 'employee';
+                        
+                        if (isExtern) {
+                            r.parentId = "EXTERN";
+                            externCount++;
+                        } else if (r._directSubordinates === 0 && isEmployee) {
+                            r.parentId = "UNCATEGORIZED";
+                            uncategorizedCount++;
+                        } else {
+                            r.parentId = "ROOT";
+                            actualRootsCount++;
+                        }
+                    });
+
+                    const uncategorizedNode = flatData.find(d => d.id === "UNCATEGORIZED");
+                    uncategorizedNode._directSubordinates = uncategorizedCount;
+
+                    if (uncategorizedCount === 0) {
+                        flatData = flatData.filter(d => d.id !== "UNCATEGORIZED");
+                    }
+                    
+                    const externNode = flatData.find(d => d.id === "EXTERN");
+                    externNode._directSubordinates = externCount;
+
+                    if (externCount === 0) {
+                        flatData = flatData.filter(d => d.id !== "EXTERN");
+                    }
+
+                    flatData.push({
+                        id: "ROOT",
+                        parentId: "",
+                        name: "Organization",
+                        position: "Company",
+                        email: "",
+                        role: "",
+                        imageUrl: null,
+                        _directSubordinates: actualRootsCount + (uncategorizedCount > 0 ? 1 : 0) + (externCount > 0 ? 1 : 0)
+                    });
+                } else if (roots.length === 0 && flatData.length > 0) {
+                    flatData[0].parentId = "";
+                }
+
+                // Sort the data so people with more subordinates appear first (at the top/left of branches)
+                flatData.sort((a, b) => b._directSubordinates - a._directSubordinates);
+
+                window.highlightedNodeId = null;
+
+                const chart = new d3.OrgChart()
+                    .container('#chart-container')
+                    .data(flatData)
+                    .nodeWidth(d => 260)
+                    .nodeHeight(d => 240)
+                    .childrenMargin(d => 50)
+                    .compactMarginBetween(d => 40)
+                    .compactMarginPair(d => 40)
+                    .linkUpdate(function (d, i, arr) {
+                        d3.select(this)
+                            .attr('stroke', 'rgba(148, 163, 184, 0.3)')
+                            .attr('stroke-width', 2);
+                    })
+                    .nodeContent(function(d, i, arr, state) {
+                        const node = d.data;
+                        const hasChildren = node._directSubordinates > 0;
+                        const imageStr = node.imageUrl 
+                            ? `<img class="node-image" src="${node.imageUrl}" />`
+                            : `<div class="node-image">${node.name.charAt(0)}</div>`;
+                        
+                        const isHighlighted = node.id === window.highlightedNodeId;
+                        
+                        return `
+                            <div style="padding-top: 15px; height: 100%;">
+                                <div class="node-card ${isHighlighted ? 'highlighted' : ''}" style="height: 220px; width: 260px;">
+                                    ${hasChildren ? `<div class="badge-count">${node._directSubordinates}</div>` : ''}
+                                    ${imageStr}
+                                    <div class="node-name" title="${node.name}">${node.name}</div>
+                                    <div class="node-position" title="${node.position}">${node.position || ''}</div>
+                                    <div class="node-details">
+                                        ${node.email ? `
+                                        <div class="node-detail-item" title="${node.email}">
+                                            <span class="node-detail-icon">✉️</span> ${node.email}
+                                        </div>` : ''}
+                                        ${node.role ? `
+                                        <div class="node-detail-item" title="${node.role}">
+                                            <span class="node-detail-icon">🏢</span> ${node.role}
+                                        </div>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    })
+                    .render();
+                    
+                // Initialize Fuse.js for search
+                const fuse = new Fuse(flatData, {
+                    keys: ['name', 'role', 'position', 'email'],
+                    threshold: 0.3,
+                    distance: 100
+                });
+
+                const searchInput = document.getElementById('search-input');
+                const searchResults = document.getElementById('search-results');
+                
+                let selectedSearchIndex = -1;
+
+                function updateSearchSelection() {
+                    const items = Array.from(searchResults.querySelectorAll('.search-result-item'));
+                    items.forEach((item, index) => {
+                        if (index === selectedSearchIndex) {
+                            item.classList.add('selected');
+                            item.scrollIntoView({ block: 'nearest' });
+                        } else {
+                            item.classList.remove('selected');
+                        }
+                    });
+                }
+
+                searchInput.addEventListener('input', (e) => {
+                    selectedSearchIndex = -1; // Reset selection on new input
+                    const query = e.target.value;
+                    if (!query) {
+                        searchResults.classList.remove('active');
+                        return;
+                    }
+                    
+                    const results = fuse.search(query).slice(0, 8); // Show top 8 matches
+                    
+                    if (results.length === 0) {
+                        searchResults.innerHTML = '<div style="padding:12px; color:#94a3b8; font-size:13px; text-align:center;">No results found</div>';
+                    } else {
+                        searchResults.innerHTML = results.map((r, i) => `
+                            <div class="search-result-item" data-id="${r.item.id}">
+                                <div class="result-name">${r.item.name}</div>
+                                <div class="result-role">${r.item.position || r.item.role || 'Employee'}</div>
+                            </div>
+                        `).join('');
+                    }
+                    searchResults.classList.add('active');
+                });
+
+                searchInput.addEventListener('keydown', (e) => {
+                    const items = Array.from(searchResults.querySelectorAll('.search-result-item'));
+                    if (items.length === 0 || !searchResults.classList.contains('active')) return;
+
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        selectedSearchIndex = Math.min(selectedSearchIndex + 1, items.length - 1);
+                        updateSearchSelection();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        selectedSearchIndex = Math.max(selectedSearchIndex - 1, -1);
+                        updateSearchSelection();
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (selectedSearchIndex >= 0 && selectedSearchIndex < items.length) {
+                            items[selectedSearchIndex].click();
+                        } else if (items.length > 0) {
+                            // If they press enter without selecting, default to the first one
+                            items[0].click();
+                        }
+                    }
+                });
+
+                searchResults.addEventListener('click', (e) => {
+                    const item = e.target.closest('.search-result-item');
+                    if (!item) return;
+                    
+                    const nodeId = item.getAttribute('data-id');
+                    
+                    // Hide results
+                    searchResults.classList.remove('active');
+                    searchInput.value = item.querySelector('.result-name').innerText;
+                    
+                    // Update state and rerender to show highlight
+                    window.highlightedNodeId = nodeId;
+                    
+                    chart.clearHighlighting();
+                    chart.setUpToTheRootHighlighted(nodeId);
+                    chart.render();
+                    
+                    // Delay centering slightly to allow expansion animation
+                    setTimeout(() => {
+                        chart.center(nodeId);
+                    }, 300);
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.search-container')) {
+                        searchResults.classList.remove('active');
+                    }
+                });
+                    
+                // Instead of expanding the entire organization (which causes massive lag for large orgs),
+                // we expand only a few levels or let the user expand manually.
+                chart.fit();
+            })
+            .catch(err => {
+                document.getElementById('loading').innerHTML = `
+                    <div style="text-align: center; color: #f87171; max-width: 400px; padding: 24px; background: rgba(30, 41, 59, 0.8); border-radius: 12px; border: 1px solid rgba(248, 113, 113, 0.2);">
+                        <h3 style="margin-top: 0; font-weight: 500;">Error Loading Data</h3>
+                        <p style="opacity: 0.9;">${err.message}</p>
+                        <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
+                        <p style="font-size: 13px; color: #94a3b8; text-align: left; line-height: 1.5; margin-bottom: 0;">
+                            1. Did you run the <code>extract.ts</code> script to generate <strong>org_tree.json</strong>?<br>
+                            2. Are you serving this file via a local web server?<br>
+                            <span style="color: #6366f1; font-family: monospace; display: block; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 6px;">bunx serve</span>
+                        </p>
+                    </div>
+                `;
+            });
+    </script>
+</body>
+</html>
