@@ -196,9 +196,43 @@ type PhotoRequestOutcome =
     | { kind: 'notFound' }
     | { kind: 'error' };
 
+/** Result of fetching one user's photo, so the caller can tell missing from failed. */
+type PhotoFetchResult =
+    | { kind: 'photo'; dataUrl: string }
+    | { kind: 'noPhoto' }
+    | { kind: 'error' };
+
+/** Running tallies so the caller can monitor progress and surface silent failures. */
+interface PhotoFetchStats {
+    withPhoto: number;
+    withoutPhoto: number;
+    failed: number;
+    throttleRetries: number;
+    timeouts: number;
+}
+
+/** How long a single photo request may run before we abandon it and retry. */
+const PHOTO_REQUEST_TIMEOUT_MILLISECONDS = 20_000;
+
 /** Sleeps for the given number of milliseconds. */
 function delay(milliseconds: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+/** Marker error thrown when a single photo request exceeds its time budget. */
+class PhotoRequestTimeoutError extends Error {}
+
+/**
+ * Races a promise against a timeout, rejecting with a PhotoRequestTimeoutError
+ * if it does not settle in time. Clears the timer either way so a completed
+ * request can never leave a dangling timer keeping the process alive.
+ */
+function withRequestTimeout<ResultType>(operation: Promise<ResultType>, timeoutMilliseconds: number): Promise<ResultType> {
+    let timeoutHandle: ReturnType<typeof setTimeout>;
+    const timeout = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new PhotoRequestTimeoutError()), timeoutMilliseconds);
+    });
+    return Promise.race([operation, timeout]).finally(() => clearTimeout(timeoutHandle));
 }
 
 /** True when a Graph error represents throttling that is worth retrying. */
@@ -230,20 +264,32 @@ function throttleWaitMilliseconds(error: any, retryAttempt: number): number {
  * throttling, reports a genuine 404 as `notFound`, and reports any other
  * failure as `error` (so callers do not mistake an outage for a missing photo).
  */
-async function requestPhotoBytes(graphClient: Client, photoEndpoint: string): Promise<PhotoRequestOutcome> {
+async function requestPhotoBytes(
+    graphClient: Client,
+    photoEndpoint: string,
+    stats: PhotoFetchStats
+): Promise<PhotoRequestOutcome> {
     for (let retryAttempt = 0; retryAttempt <= MAX_THROTTLE_RETRIES; retryAttempt++) {
         try {
-            const imageBytes = await graphClient
-                .api(photoEndpoint)
-                .responseType(ResponseType.ARRAYBUFFER)
-                .get();
+            const imageBytes = await withRequestTimeout(
+                graphClient.api(photoEndpoint).responseType(ResponseType.ARRAYBUFFER).get(),
+                PHOTO_REQUEST_TIMEOUT_MILLISECONDS
+            );
             return { kind: 'success', imageBytes };
         } catch (error) {
             if (isNotFoundError(error)) {
                 return { kind: 'notFound' };
             }
+            const timedOut = error instanceof PhotoRequestTimeoutError;
+            if (timedOut) stats.timeouts++;
             if (isThrottlingError(error) && retryAttempt < MAX_THROTTLE_RETRIES) {
+                stats.throttleRetries++;
                 await delay(throttleWaitMilliseconds(error, retryAttempt));
+                continue;
+            }
+            // A timed-out request is retried immediately (a fresh connection may
+            // succeed); throttling waits above, everything else fails outright.
+            if (timedOut && retryAttempt < MAX_THROTTLE_RETRIES) {
                 continue;
             }
             return { kind: 'error' };
@@ -290,27 +336,34 @@ function encodeImageAsDataUrl(imageBytes: ArrayBuffer): string {
  * that exact thumbnail genuinely does not exist (a 404) — never on a transient
  * error, which would risk pulling multi-megabyte originals into the HTML.
  */
-async function fetchProfilePhotoDataUrl(graphClient: Client, userId: string): Promise<string | null> {
-    const thumbnailOutcome = await requestPhotoBytes(graphClient, `/users/${userId}/photos/${THUMBNAIL_SIZE}/$value`);
+async function fetchProfilePhoto(
+    graphClient: Client,
+    userId: string,
+    stats: PhotoFetchStats
+): Promise<PhotoFetchResult> {
+    const thumbnailOutcome = await requestPhotoBytes(graphClient, `/users/${userId}/photos/${THUMBNAIL_SIZE}/$value`, stats);
     if (thumbnailOutcome.kind === 'success') {
-        return encodeImageAsDataUrl(thumbnailOutcome.imageBytes);
+        return { kind: 'photo', dataUrl: encodeImageAsDataUrl(thumbnailOutcome.imageBytes) };
     }
     if (thumbnailOutcome.kind === 'error') {
         // A transient failure — do not fall back to the (potentially huge) original.
-        return null;
+        return { kind: 'error' };
     }
 
     // The sized thumbnail does not exist; try the user's default photo instead.
-    const defaultPhotoOutcome = await requestPhotoBytes(graphClient, `/users/${userId}/photo/$value`);
+    const defaultPhotoOutcome = await requestPhotoBytes(graphClient, `/users/${userId}/photo/$value`, stats);
     if (defaultPhotoOutcome.kind === 'success') {
-        return encodeImageAsDataUrl(defaultPhotoOutcome.imageBytes);
+        return { kind: 'photo', dataUrl: encodeImageAsDataUrl(defaultPhotoOutcome.imageBytes) };
+    }
+    if (defaultPhotoOutcome.kind === 'error') {
+        return { kind: 'error' };
     }
     // Many users simply have no profile picture — that's fine.
-    return null;
+    return { kind: 'noPhoto' };
 }
 
-/** Renders a single-line terminal progress bar with a rough ETA. */
-function renderProgress(completedCount: number, totalCount: number, startMilliseconds: number): void {
+/** Renders a single-line terminal progress bar with live tallies and a rough ETA. */
+function renderProgress(completedCount: number, totalCount: number, startMilliseconds: number, stats: PhotoFetchStats): void {
     const completionRatio = totalCount > 0 ? completedCount / totalCount : 1;
     const barWidth = 30;
     const filledWidth = Math.round(completionRatio * barWidth);
@@ -323,7 +376,14 @@ function renderProgress(completedCount: number, totalCount: number, startMillise
     const remainingSeconds = completedPerSecond > 0 ? Math.round((totalCount - completedCount) / completedPerSecond) : 0;
     const etaText = completedCount >= totalCount ? 'done' : `ETA ${formatDuration(remainingSeconds)}`;
 
-    process.stdout.write(`\r  [${progressBar}] ${percentText}%  ${completedCount}/${totalCount}  ${etaText}   `);
+    // Live tallies so a stall (throttling/timeouts) or silent failures are visible as they happen.
+    const tallyText = `ok ${stats.withPhoto} · none ${stats.withoutPhoto} · fail ${stats.failed}`;
+    const throttleText = stats.throttleRetries > 0 || stats.timeouts > 0
+        ? ` · throttled ${stats.throttleRetries}, timeouts ${stats.timeouts}`
+        : '';
+
+    // Trailing spaces clear any leftover characters from a previously longer line.
+    process.stdout.write(`\r  [${progressBar}] ${percentText}%  ${completedCount}/${totalCount}  ${tallyText}${throttleText}  ${etaText}   `);
 }
 
 /** Formats seconds as a compact m:ss (or h:mm:ss) string. */
@@ -338,29 +398,44 @@ function formatDuration(totalSeconds: number): string {
 
 export async function fetchAllPhotos(graphClient: Client, users: any[]): Promise<PhotoMap> {
     const photos: PhotoMap = {};
+    const stats: PhotoFetchStats = { withPhoto: 0, withoutPhoto: 0, failed: 0, throttleRetries: 0, timeouts: 0 };
     console.log('Fetching profile pictures...');
 
     const batchSize = 10;
-    const reportEveryUsers = 100;
     const startMilliseconds = Date.now();
-    let lastReportedCount = 0;
-    renderProgress(0, users.length, startMilliseconds);
+    renderProgress(0, users.length, startMilliseconds, stats);
     for (let batchStartIndex = 0; batchStartIndex < users.length; batchStartIndex += batchSize) {
         const userBatch = users.slice(batchStartIndex, batchStartIndex + batchSize);
         await Promise.all(
             userBatch.map(async (user) => {
-                const photoDataUrl = await fetchProfilePhotoDataUrl(graphClient, user.id);
-                if (photoDataUrl) photos[user.id] = photoDataUrl;
+                const result = await fetchProfilePhoto(graphClient, user.id, stats);
+                if (result.kind === 'photo') {
+                    photos[user.id] = result.dataUrl;
+                    stats.withPhoto++;
+                } else if (result.kind === 'noPhoto') {
+                    stats.withoutPhoto++;
+                } else {
+                    stats.failed++;
+                }
             })
         );
+        // Redraw every batch so throttle waits and failures show up live rather than looking frozen.
         const processedCount = Math.min(batchStartIndex + batchSize, users.length);
-        // Refresh the bar every 100 users (and once at the end), regardless of org size.
-        if (processedCount - lastReportedCount >= reportEveryUsers || processedCount === users.length) {
-            renderProgress(processedCount, users.length, startMilliseconds);
-            lastReportedCount = processedCount;
-        }
+        renderProgress(processedCount, users.length, startMilliseconds, stats);
     }
-    console.log('\nFinished fetching photos.');
+    process.stdout.write('\n');
+    console.log(
+        `Finished fetching photos: ${stats.withPhoto} with a picture, ${stats.withoutPhoto} without, ${stats.failed} failed.`
+    );
+    if (stats.throttleRetries > 0 || stats.timeouts > 0) {
+        console.log(`  (Graph throttled ${stats.throttleRetries} request(s); ${stats.timeouts} timed out and were retried.)`);
+    }
+    if (stats.failed > 0) {
+        console.warn(
+            `  ! ${stats.failed} photo(s) could not be fetched after retries — those users will show no picture. ` +
+            `Re-run the extract later to try filling them in.`
+        );
+    }
     return photos;
 }
 
