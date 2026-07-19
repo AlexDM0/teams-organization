@@ -1494,14 +1494,25 @@
                     { key: 'country', label: 'Country', get: person => person.country },
                 ];
 
-                // Distinct, sorted values per category (excluding the synthetic group nodes).
+                // A single field can pack several values separated by commas, slashes or
+                // semicolons — e.g. a department "FS/ENG/D/TO". Split those apart so each
+                // token becomes its own filterable value ("FS", "ENG", "D", "TO"), and a
+                // filter for "ENG" matches anyone whose department contains that token.
+                function splitFilterTokens(value) {
+                    if (!value) return [];
+                    return String(value)
+                        .split(/[,/;]/)
+                        .map(token => token.trim())
+                        .filter(Boolean);
+                }
+
+                // Distinct, sorted tokens per category (excluding the synthetic group nodes).
                 const distinctValuesByCategory = new Map();
                 for (const category of FILTER_CATEGORIES) {
                     const values = new Set();
                     for (const person of allPeople) {
                         if (isSyntheticNode(person)) continue;
-                        const value = category.get(person);
-                        if (value) values.add(value);
+                        for (const token of splitFilterTokens(category.get(person))) values.add(token);
                     }
                     if (values.size > 0) {
                         distinctValuesByCategory.set(category.key, [...values].sort((first, second) => first.localeCompare(second)));
@@ -1571,8 +1582,8 @@
                     // A person matches when, for every active category, their value is one of
                     // the selected tags (AND across categories, OR within a category).
                     const personMatches = (person) => activeCategories.every(({ category, values }) => {
-                        const value = category.get(person);
-                        return value && values.has(value);
+                        const tokens = splitFilterTokens(category.get(person));
+                        return tokens.some(token => values.has(token));
                     });
 
                     const keepIds = new Set();
