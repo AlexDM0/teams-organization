@@ -2,6 +2,85 @@
 
 A fast, Typescript/Bun-based script that extracts the organization tree from Microsoft Teams (Entra ID) using the Microsoft Graph API and generates a beautiful, interactive D3.js visualization.
 
+## Quick Start (CLI)
+
+The project ships a `teams-org` CLI. It works out of the box using Microsoft's
+public app registration — see [Authentication](#authentication-client-id--tenant-id)
+for details and how to use your own IDs via `tenant.json`.
+
+1. **Install Dependencies & link the CLI** (once)
+
+   Run the setup script — it checks that Bun is installed and working, installs
+   dependencies, and links `teams-org` onto your PATH:
+   ```bash
+   ./setup.sh            # macOS / Linux / Windows (Git Bash, MSYS2, or WSL)
+   ```
+   Prefer to do it manually?
+   ```bash
+   bun install
+   bun link          # makes `teams-org` available on your PATH
+   ```
+   > No global link? You can always run it via `bun run extract`.
+
+2. **Extract**
+   ```bash
+   teams-org extract
+   ```
+   The command will:
+   - Check that required tools (like Bun) are installed and, if not, tell you how
+     to install them.
+   - Ask which folder to extract into (defaults to the current directory).
+   - Create/read `tenant.json` in that folder and, on a fresh folder, ask whether
+     you want to use custom client/tenant IDs (see
+     [Authentication](#authentication-client-id--tenant-id)).
+   - Authenticate through your browser (interactive sign-in by default; pass
+     `--device-code` for the device-code flow) and download the whole org.
+   - Write these files into the chosen folder:
+     - `tenant.json` — the client/tenant IDs used for this folder.
+     - `org_tree.json` — the readable hierarchy (no image blobs).
+     - `photos.json` — a separate `id → base64` map of profile pictures.
+     - `index.html` — a **fully portable**, self-contained visualization with the
+       data (and vendor libraries) embedded. Just double-click it — no web server
+       needed.
+     - `custom_tenant_id.html` — *(only if you opt into custom IDs)* a guide for
+       setting them up.
+
+### Useful options
+
+```bash
+teams-org extract --folder ./my-org      # choose output folder non-interactively
+teams-org extract --yes                  # accept all defaults, no prompts
+teams-org extract --no-photos            # skip profile pictures
+teams-org extract --no-inline            # keep CDN <script> links (smaller file, needs internet)
+teams-org extract --device-code          # use the device-code flow instead of the browser
+teams-org extract --tenant-id <id> --client-id <id>   # use your own app registration
+```
+
+### Rebuilding without re-downloading
+
+Already have an extraction and just want a fresh `index.html` (for example after
+pulling a new template)? Use `update` — it reuses the existing `org_tree.json`
+and `photos.json` in the folder and skips authentication and downloading:
+
+```bash
+teams-org update                 # rebuild index.html in the current folder
+teams-org update --folder ./my-org
+teams-org update --no-inline     # keep CDN <script> links instead of inlining
+```
+
+### Viewing the raw JSON (dev mode)
+
+The generated `index.html` is portable and needs no server. If you instead want to
+open the template in `templates/index.html` against the raw `org_tree.json` /
+`photos.json` files, copy those files next to the template (or serve them from the
+same folder) and serve locally to satisfy browser CORS rules:
+
+```bash
+bun run serve
+```
+Open the printed URL in your browser (navigate into `templates/`) to explore the
+interactive chart!
+
 ## Features
 - **Interactive Browser Sign-In**: Signs in through your system browser by default (no passwords stored); a device-code flow is available via `--device-code` for headless machines.
 - **Deep Graph API Integration**: Automatically resolves managers and fetches profile-picture thumbnails encoded directly to Base64, with throttling-aware retries and silent token refresh for large tenants.
@@ -84,83 +163,4 @@ Lastly, we need to give the app permission to read the organization's user profi
 3. In the search box, type `User.Read.All` and check the box next to it.
 4. Click **Add permissions** at the bottom.
 5. **Important:** Back on the API permissions screen, click the button that says **Grant admin consent for [Your Organization]** (you may need a company administrator to click this for you if you don't have admin rights).
-
-## Quick Start (CLI)
-
-The project ships a `teams-org` CLI. It works out of the box using Microsoft's
-public app registration — see [Authentication](#authentication-client-id--tenant-id)
-for details and how to use your own IDs via `tenant.json`.
-
-1. **Install Dependencies & link the CLI** (once)
-
-   Run the setup script — it checks that Bun is installed and working, installs
-   dependencies, and links `teams-org` onto your PATH:
-   ```bash
-   ./setup.sh            # macOS / Linux / Windows (Git Bash, MSYS2, or WSL)
-   ```
-   Prefer to do it manually?
-   ```bash
-   bun install
-   bun link          # makes `teams-org` available on your PATH
-   ```
-   > No global link? You can always run it via `bun run extract`.
-
-2. **Extract**
-   ```bash
-   teams-org extract
-   ```
-   The command will:
-   - Check that required tools (like Bun) are installed and, if not, tell you how
-     to install them.
-   - Ask which folder to extract into (defaults to the current directory).
-   - Create/read `tenant.json` in that folder and, on a fresh folder, ask whether
-     you want to use custom client/tenant IDs (see
-     [Authentication](#authentication-client-id--tenant-id)).
-   - Authenticate through your browser (interactive sign-in by default; pass
-     `--device-code` for the device-code flow) and download the whole org.
-   - Write these files into the chosen folder:
-     - `tenant.json` — the client/tenant IDs used for this folder.
-     - `org_tree.json` — the readable hierarchy (no image blobs).
-     - `photos.json` — a separate `id → base64` map of profile pictures.
-     - `index.html` — a **fully portable**, self-contained visualization with the
-       data (and vendor libraries) embedded. Just double-click it — no web server
-       needed.
-     - `custom_tenant_id.html` — *(only if you opt into custom IDs)* a guide for
-       setting them up.
-
-### Useful options
-
-```bash
-teams-org extract --folder ./my-org      # choose output folder non-interactively
-teams-org extract --yes                  # accept all defaults, no prompts
-teams-org extract --no-photos            # skip profile pictures
-teams-org extract --no-inline            # keep CDN <script> links (smaller file, needs internet)
-teams-org extract --device-code          # use the device-code flow instead of the browser
-teams-org extract --tenant-id <id> --client-id <id>   # use your own app registration
-```
-
-### Rebuilding without re-downloading
-
-Already have an extraction and just want a fresh `index.html` (for example after
-pulling a new template)? Use `update` — it reuses the existing `org_tree.json`
-and `photos.json` in the folder and skips authentication and downloading:
-
-```bash
-teams-org update                 # rebuild index.html in the current folder
-teams-org update --folder ./my-org
-teams-org update --no-inline     # keep CDN <script> links instead of inlining
-```
-
-### Viewing the raw JSON (dev mode)
-
-The generated `index.html` is portable and needs no server. If you instead want to
-open the template in `templates/index.html` against the raw `org_tree.json` /
-`photos.json` files, copy those files next to the template (or serve them from the
-same folder) and serve locally to satisfy browser CORS rules:
-
-```bash
-bun run serve
-```
-Open the printed URL in your browser (navigate into `templates/`) to explore the
-interactive chart!
 
