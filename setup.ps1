@@ -21,10 +21,6 @@
 # the script on a perfectly healthy `bun install`. Instead we check
 # $LASTEXITCODE after each native call and wrap .NET calls in try/catch.
 
-# Run from the folder this script lives in (guard against being dot-sourced or
-# pasted via iex, where $PSScriptRoot is empty).
-if ($PSScriptRoot) { Set-Location -Path $PSScriptRoot }
-
 # --- Pretty output helpers -------------------------------------------------
 # Glyphs are built from code points at runtime so the source stays pure ASCII
 # (a BOM-less .ps1 with literal non-ASCII would render as mojibake under 5.1).
@@ -32,14 +28,14 @@ $script:BulletGlyph = [char]0x2022  # bullet
 $script:CheckGlyph  = [char]0x2713  # check mark
 $script:CrossGlyph  = [char]0x2717  # ballot X
 
+# Exit code the launcher at the bottom hands back (only when run as a script).
+$script:SetupExitCode = 0
+
 function Write-Bold($message) { Write-Host $message -ForegroundColor White }
 function Write-Info($message) { Write-Host "$script:BulletGlyph $message" -ForegroundColor Cyan }
 function Write-Ok($message)   { Write-Host "$script:CheckGlyph $message" -ForegroundColor Green }
 function Write-Warn($message) { Write-Host "! $message" -ForegroundColor Yellow }
-function Write-Err($message)   { Write-Host "$script:CrossGlyph $message" -ForegroundColor Red }
-
-Write-Bold 'Setting up the teams-org CLI (windows)'
-Write-Host ''
+function Write-Err($message)  { Write-Host "$script:CrossGlyph $message" -ForegroundColor Red }
 
 function Show-BunInstallHelp {
     Write-Host ''
@@ -53,72 +49,45 @@ function Show-BunInstallHelp {
     Write-Warn 'After installing, open a new terminal (so PATH updates) and re-run .\setup.ps1'
 }
 
-# --- 1. Verify Bun is installed AND working --------------------------------
-Write-Info 'Checking for Bun...'
-if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
-    Show-BunInstallHelp
-    exit 1
-}
-
-# Confirm it actually runs. Merge stderr and rely on $LASTEXITCODE - a broken
-# install exits non-zero (or fails to launch, landing in catch).
-$bunVersion = $null
-try {
-    $bunOutput = (& bun --version 2>&1 | Out-String)
-    if ($LASTEXITCODE -eq 0 -and $bunOutput) {
-        $bunVersion = ($bunOutput -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1).Trim()
-    }
-} catch { }
-
-if (-not $bunVersion) {
-    Write-Err "Found 'bun' on PATH but it failed to run - the install looks broken."
-    Show-BunInstallHelp
-    exit 1
-}
-Write-Ok "Bun $bunVersion is installed and working."
-
-# --- 2. Install dependencies ----------------------------------------------
-Write-Info 'Installing dependencies (bun install)...'
-& bun install
-if ($LASTEXITCODE -ne 0) { Write-Err 'bun install failed.'; exit 1 }
-Write-Ok 'Dependencies installed.'
-
-# --- 3. Link the CLI globally ---------------------------------------------
-Write-Info 'Linking the teams-org CLI (bun link)...'
-& bun link
-if ($LASTEXITCODE -ne 0) { Write-Err 'bun link failed.'; exit 1 }
-Write-Ok 'CLI linked.'
-
-# --- 4. Ensure Bun's bin directory is on the user PATH --------------------
-# Bun places global bins in $env:BUN_INSTALL\bin (defaults to %USERPROFILE%\.bun\bin).
-$bunInstallRoot = if ($env:BUN_INSTALL) { $env:BUN_INSTALL } else { Join-Path $env:USERPROFILE '.bun' }
-$bunBinDirectory = Join-Path $bunInstallRoot 'bin'
-
-# Persistently add it to the *user* PATH if it isn't already there.
-# [Environment]::SetEnvironmentVariable also broadcasts WM_SETTINGCHANGE, so a
-# newly-opened terminal picks up the change without a full sign-out (a raw
-# registry write would not). It preserves your existing PATH length (unlike
-# setx, which truncates at 1024 chars). Idempotent and safe to re-run.
+# Persistently add $binDirectory to the *user* PATH if it isn't already there.
+# Reads/writes the raw registry value with DoNotExpandEnvironmentNames so
+# existing %VAR%-style entries (e.g. the %USERPROFILE%\.bun\bin that bun's own
+# installer may write) are preserved rather than frozen to their current
+# expansion. Idempotent and safe to re-run. We deliberately do not broadcast the
+# change to running processes - the CLI becomes available on the next terminal
+# open, which keeps this pure .NET and portable (no user32 P/Invoke).
 function Add-BunToUserPath($binDirectory) {
     try {
         $normalizedTarget = $binDirectory.TrimEnd('\')
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $existingEntries = @()
-        if ($userPath) { $existingEntries = $userPath -split ';' | Where-Object { $_ } }
 
-        # -ieq (explicit case-insensitive) plus trailing-slash trim so we don't
-        # append a near-duplicate that differs only by case or a trailing '\'.
-        if ($existingEntries | Where-Object { $_.TrimEnd('\') -ieq $normalizedTarget }) {
-            Write-Info "Bun's bin directory is already on your user PATH."
-            return
+        $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+        if (-not $environmentKey) {
+            $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+        }
+        try {
+            $userPath = [string]$environmentKey.GetValue(
+                'Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            $existingEntries = @()
+            if ($userPath) { $existingEntries = $userPath -split ';' | Where-Object { $_ } }
+
+            # -ieq (explicit case-insensitive) plus trailing-slash trim so we
+            # don't append a near-duplicate that differs only by case or a '\'.
+            if ($existingEntries | Where-Object { $_.TrimEnd('\') -ieq $normalizedTarget }) {
+                Write-Info "Bun's bin directory is already on your user PATH."
+                return
+            }
+
+            $newPath = if ([string]::IsNullOrWhiteSpace($userPath)) {
+                $normalizedTarget
+            } else {
+                ($userPath.TrimEnd(';') + ';' + $normalizedTarget)
+            }
+            # ExpandString => REG_EXPAND_SZ, so %VAR% entries keep expanding.
+            $environmentKey.SetValue('Path', $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+        } finally {
+            $environmentKey.Close()
         }
 
-        $newPath = if ([string]::IsNullOrEmpty($userPath)) {
-            $normalizedTarget
-        } else {
-            ($userPath.TrimEnd(';') + ';' + $normalizedTarget)
-        }
-        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
         Write-Ok "Added Bun to your user PATH ($normalizedTarget)."
     } catch {
         Write-Warn "Couldn't update your PATH automatically: $($_.Exception.Message)"
@@ -127,32 +96,114 @@ function Add-BunToUserPath($binDirectory) {
     }
 }
 
-Write-Host ''
-# Make this session able to find the just-linked shim for the check below,
-# without clobbering process-only PATH entries (nvm, conda, dev shells).
-if (($env:Path -split ';') -notcontains $bunBinDirectory) {
-    $env:Path = "$env:Path;$bunBinDirectory"
-}
+# Everything runs inside this function so early-outs use `return` (not `exit`):
+# dot-sourcing this file therefore can't close the caller's shell. The launcher
+# at the bottom maps the result to a real exit code only when run as a script.
+function Invoke-TeamsOrgSetup {
+    # Run from the folder this script lives in. When $PSScriptRoot is empty (the
+    # script was dot-sourced or pasted via iex), fall back to the current dir but
+    # only if it really is this project, so `bun link` can't register the wrong
+    # package or scaffold stray files in an unrelated folder.
+    if ($PSScriptRoot) {
+        Set-Location -Path $PSScriptRoot
+    } else {
+        $packageName = $null
+        if (Test-Path 'package.json') {
+            try { $packageName = (Get-Content 'package.json' -Raw | ConvertFrom-Json).name } catch { }
+        }
+        if ($packageName -ne 'msteams-org-tree') {
+            Write-Err "Run this from the teams-org project folder (current directory isn't it)."
+            $script:SetupExitCode = 1; return
+        }
+    }
 
-# Verify the shim bun just linked actually exists, rather than trusting a
-# possibly-stale `teams-org` from some other install elsewhere on PATH.
-$linkedShimExists = (Test-Path (Join-Path $bunBinDirectory 'teams-org')) -or
-                    (Test-Path (Join-Path $bunBinDirectory 'teams-org.exe')) -or
-                    (Test-Path (Join-Path $bunBinDirectory 'teams-org.cmd')) -or
-                    (Test-Path (Join-Path $bunBinDirectory 'teams-org.bunx'))
+    Write-Bold 'Setting up the teams-org CLI (windows)'
+    Write-Host ''
 
-if ($linkedShimExists -and (Get-Command teams-org -ErrorAction SilentlyContinue)) {
-    Write-Ok "Success! 'teams-org' is ready to use."
+    # --- 1. Verify Bun is installed AND working ----------------------------
+    Write-Info 'Checking for Bun...'
+    if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+        Show-BunInstallHelp
+        $script:SetupExitCode = 1; return
+    }
+
+    # Confirm it actually runs. Reset $LASTEXITCODE first so a stale 0 from an
+    # earlier call can't be mistaken for success if `bun` fails to launch.
+    $bunVersion = $null
+    try {
+        $global:LASTEXITCODE = 0
+        $bunOutput = (& bun --version 2>&1 | Out-String)
+        if ($LASTEXITCODE -eq 0 -and $bunOutput) {
+            $bunVersion = ($bunOutput -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -First 1).Trim()
+        }
+    } catch { }
+
+    if (-not $bunVersion) {
+        Write-Err "Found 'bun' on PATH but it failed to run - the install looks broken."
+        Show-BunInstallHelp
+        $script:SetupExitCode = 1; return
+    }
+    Write-Ok "Bun $bunVersion is installed and working."
+
+    # --- 2. Install dependencies -------------------------------------------
+    Write-Info 'Installing dependencies (bun install)...'
+    # Pre-set a non-zero code so a native call that fails to even launch (leaving
+    # $LASTEXITCODE untouched) is treated as a failure, not a stale success.
+    $global:LASTEXITCODE = 1
+    & bun install
+    if ($LASTEXITCODE -ne 0) { Write-Err 'bun install failed.'; $script:SetupExitCode = 1; return }
+    Write-Ok 'Dependencies installed.'
+
+    # --- 3. Link the CLI globally ------------------------------------------
+    Write-Info 'Linking the teams-org CLI (bun link)...'
+    $global:LASTEXITCODE = 1
+    & bun link
+    if ($LASTEXITCODE -ne 0) { Write-Err 'bun link failed.'; $script:SetupExitCode = 1; return }
+    Write-Ok 'CLI linked.'
+
+    # --- 4. Ensure Bun's bin directory is on the user PATH -----------------
+    # Bun places global bins in $env:BUN_INSTALL\bin (default %USERPROFILE%\.bun\bin).
+    $bunInstallRoot = if ($env:BUN_INSTALL) { $env:BUN_INSTALL } else { Join-Path $env:USERPROFILE '.bun' }
+    $bunBinDirectory = Join-Path $bunInstallRoot 'bin'
+
     Write-Host ''
-    Write-Info 'Try it now:'
-    Write-Host '    teams-org extract'
-} else {
-    Write-Warn "'teams-org' was linked but isn't on your PATH yet."
-    Write-Host ''
+    # Persist to the user PATH *unconditionally* (idempotent) so the next
+    # terminal always finds it. We intentionally leave the current session's PATH
+    # untouched - the CLI becomes available on the next terminal open, which is
+    # the only guarantee a subprocess installer can make portably anyway.
     Add-BunToUserPath $bunBinDirectory
+
+    # Success is gated on the freshly-linked shim actually existing in the bun
+    # bin dir - a filesystem check, independent of PATH (so a stale teams-org
+    # elsewhere on PATH can't fake success).
+    $linkedShimExists = (Test-Path (Join-Path $bunBinDirectory 'teams-org.exe')) -or
+                        (Test-Path (Join-Path $bunBinDirectory 'teams-org.cmd')) -or
+                        (Test-Path (Join-Path $bunBinDirectory 'teams-org.bunx')) -or
+                        (Test-Path (Join-Path $bunBinDirectory 'teams-org'))
+
     Write-Host ''
-    Write-Info 'Open a new terminal to pick up the updated PATH.'
-    Write-Host ''
-    Write-Info 'Meanwhile you can always run it from this folder with:'
-    Write-Host '    bun run bin/cli.ts extract'
+    if ($linkedShimExists) {
+        Write-Ok "Success! 'teams-org' is installed."
+        Write-Host ''
+        Write-Info 'Open a new terminal (to pick up PATH), then run:'
+        Write-Host '    teams-org extract'
+    } else {
+        Write-Warn "'teams-org' was linked but no shim was found in $bunBinDirectory."
+        Write-Host ''
+        Write-Info 'This usually means bun linked into a different directory. Check with:'
+        Write-Host '    bun pm bin -g'
+        Write-Host ''
+        Write-Info 'Ensure that directory is on your PATH, or re-run:  bun link'
+        Write-Host ''
+        Write-Info 'Meanwhile you can always run it from this folder with:'
+        Write-Host '    bun run bin/cli.ts extract'
+    }
 }
+
+# Run it. Because bun install/link stream their output uncaptured here, the
+# function returns nothing - the exit code travels via $script:SetupExitCode.
+Invoke-TeamsOrgSetup
+
+# Only hard-exit when launched as a script (-File / & .\setup.ps1). If someone
+# dot-sources this file, `exit` would close their whole shell, so we skip it.
+if ($MyInvocation.InvocationName -ne '.') { exit $script:SetupExitCode }
