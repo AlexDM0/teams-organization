@@ -15,12 +15,53 @@ for details and how to use your own IDs via `tenant.json`.
    ```bash
    ./setup.sh            # macOS / Linux / Windows (Git Bash, MSYS2, or WSL)
    ```
+   The script also makes sure `teams-org` ends up on your PATH: on macOS/Linux it
+   adds Bun's bin directory to your shell rc file (`~/.zshrc` or `~/.bashrc`,
+   **creating it if it doesn't exist**); on Windows it adds it to your user PATH
+   via PowerShell. Open a new terminal afterwards so the change takes effect.
+
    Prefer to do it manually?
    ```bash
    bun install
    bun link          # makes `teams-org` available on your PATH
    ```
    > No global link? You can always run it via `bun run extract`.
+
+   #### Windows
+
+   Two options — pick whichever shell you use:
+
+   **Native PowerShell** (no bash needed) — run `setup.ps1`:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\setup.ps1
+   ```
+
+   **Git Bash / MSYS2** — run `setup.sh` (it won't run directly in PowerShell or
+   CMD; needs a bash shell such as the one bundled with
+   [Git for Windows](https://git-scm.com/download/win)):
+   ```bash
+   ./setup.sh
+   ```
+
+   Both `setup.ps1` and `setup.sh` (under Git Bash/MSYS2) install dependencies,
+   link the CLI, and add `%USERPROFILE%\.bun\bin` to your **Windows user PATH**
+   automatically (preserving your existing PATH; safe to re-run). **Open a new
+   terminal** afterwards so the updated PATH is picked up, then `teams-org
+   extract` works from any shell — PowerShell, CMD, or Git Bash.
+
+   > Under **WSL** you're in a Linux environment: run `./setup.sh` and install a
+   > Linux Bun — it's treated exactly like the macOS/Linux flow above (it edits
+   > `~/.bashrc`), independent of your Windows Bun/PATH.
+
+   Prefer to do it manually? From PowerShell:
+   ```powershell
+   bun install
+   bun link
+   ```
+   Bun's installer normally puts `%USERPROFILE%\.bun\bin` on your PATH already; if
+   `teams-org` still isn't found, add that folder under **System Environment
+   Variables → Path** and open a new terminal. (Meanwhile `bun run extract` always
+   works from the project folder.)
 
 2. **Extract**
    ```bash
