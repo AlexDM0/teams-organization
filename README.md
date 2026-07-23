@@ -81,7 +81,9 @@ has disabled that public app do you need your own IDs — see
      `--device-code` for the device-code flow) and download the whole org.
    - Write these files into the chosen folder:
      - `tenant.json` — the client/tenant IDs used for this folder.
-     - `org_tree.json` — the readable hierarchy (no image blobs).
+     - `org_graph.json` — the readable org graph: `{ nodes, edges }`, where nodes
+       are people and edges are typed relationships (`IS_MANAGER_OF`, manager →
+       report). No image blobs.
      - `photos.json` — a separate `id → base64` map of profile pictures.
      - `index.html` — a **fully portable**, self-contained visualization with the
        data (and vendor libraries) embedded. Just double-click it — no web server
@@ -103,7 +105,7 @@ teams-org extract --tenant-id <id> --client-id <id>   # use your own app registr
 ### Rebuilding without re-downloading
 
 Already have an extraction and just want a fresh `index.html` (for example after
-pulling a new template)? Use `update` — it reuses the existing `org_tree.json`
+pulling a new template)? Use `update` — it reuses the existing `org_graph.json`
 and `photos.json` in the folder and skips authentication and downloading:
 
 ```bash
@@ -115,7 +117,7 @@ teams-org update --no-inline     # keep CDN <script> links instead of inlining
 ### Viewing the raw JSON (dev mode)
 
 The generated `index.html` is portable and needs no server. If you instead want to
-open the template in `templates/index.html` against the raw `org_tree.json` /
+open the template in `templates/index.html` against the raw `org_graph.json` /
 `photos.json` files, copy those files next to the template (or serve them from the
 same folder) and serve locally to satisfy browser CORS rules:
 

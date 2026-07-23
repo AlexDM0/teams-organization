@@ -985,27 +985,27 @@
     <!-- ORG_DATA_PLACEHOLDER -->
     <script>
         (function () {
-            const embeddedTreeElement = document.getElementById('org-data-embedded');
+            const embeddedGraphElement = document.getElementById('org-graph-embedded');
             const embeddedPhotosElement = document.getElementById('org-photos-embedded');
             let orgDataPromise;
-            if (embeddedTreeElement) {
+            if (embeddedGraphElement) {
                 // Portable build: data is embedded directly in the page.
                 orgDataPromise = Promise.resolve().then(() => ({
-                    tree: JSON.parse(embeddedTreeElement.textContent),
+                    graph: JSON.parse(embeddedGraphElement.textContent),
                     photos: embeddedPhotosElement ? JSON.parse(embeddedPhotosElement.textContent) : {}
                 }));
             } else {
                 // Dev mode: fetch the raw JSON files served next to this template.
                 orgDataPromise = Promise.all([
-                    fetch('org_tree.json').then(response => {
-                        if (!response.ok) throw new Error("Could not load org_tree.json");
+                    fetch('org_graph.json').then(response => {
+                        if (!response.ok) throw new Error("Could not load org_graph.json");
                         return response.json();
                     }),
                     fetch('photos.json').then(response => response.ok ? response.json() : {}).catch(() => ({}))
-                ]).then(([tree, photos]) => ({ tree, photos }));
+                ]).then(([graph, photos]) => ({ graph, photos }));
             }
             orgDataPromise
-            .then(({ tree, photos }) => {
+            .then(({ graph, photos }) => {
                 document.getElementById('loading').style.display = 'none';
 
                 // Catalog of profile fields that can be shown on cards / in the overlay.
@@ -1068,37 +1068,38 @@
                     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
-                // Flatten the nested tree into the flat id/parentId list d3-org-chart expects.
-                // A visited set guards against manager cycles (which would otherwise recurse forever).
-                let peopleList = [];
-                function flattenTree(nodes, visitedIds = new Set()) {
-                    nodes.forEach(node => {
-                        if (visitedIds.has(node.id)) return;
-                        visitedIds.add(node.id);
-                        peopleList.push({
-                            id: node.id,
-                            parentId: node.parentId || "",
-                            name: node.name,
-                            position: node.position,
-                            email: node.email,
-                            role: node.role,
-                            mobilePhone: node.mobilePhone || "",
-                            businessPhone: node.businessPhone || "",
-                            officeLocation: node.officeLocation || "",
-                            city: node.city || "",
-                            state: node.state || "",
-                            country: node.country || "",
-                            companyName: node.companyName || "",
-                            employeeId: node.employeeId || "",
-                            directReportCount: node.children ? node.children.length : 0
-                        });
-                        if (node.children && node.children.length > 0) {
-                            flattenTree(node.children, visitedIds);
-                        }
-                    });
-                }
+                // The graph stores relationships as edges; d3-org-chart needs a flat
+                // id/parentId list. Reconstruct each person's manager (parentId) and
+                // direct-report count from the IS_MANAGER_OF edges (from = manager,
+                // to = report). The extractor guarantees one manager per person and a
+                // cycle-free forest, so this maps cleanly onto a single parentId each.
+                const graphNodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+                const graphEdges = Array.isArray(graph.edges) ? graph.edges : [];
+                const managerIdByReportId = {};
+                const directReportCountByManagerId = {};
+                graphEdges.forEach(edge => {
+                    if (!edge || edge.type !== 'IS_MANAGER_OF') return;
+                    managerIdByReportId[edge.to] = edge.from;
+                    directReportCountByManagerId[edge.from] = (directReportCountByManagerId[edge.from] || 0) + 1;
+                });
 
-                flattenTree(tree);
+                let peopleList = graphNodes.map(node => ({
+                    id: node.id,
+                    parentId: managerIdByReportId[node.id] || "",
+                    name: node.name,
+                    position: node.position,
+                    email: node.email,
+                    role: node.role,
+                    mobilePhone: node.mobilePhone || "",
+                    businessPhone: node.businessPhone || "",
+                    officeLocation: node.officeLocation || "",
+                    city: node.city || "",
+                    state: node.state || "",
+                    country: node.country || "",
+                    companyName: node.companyName || "",
+                    employeeId: node.employeeId || "",
+                    directReportCount: directReportCountByManagerId[node.id] || 0
+                }));
 
                 const rootPeople = peopleList.filter(person => !person.parentId);
                 if (rootPeople.length > 1) {
@@ -1823,7 +1824,7 @@
                         <p style="opacity: 0.9;">${error.message}</p>
                         <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 16px 0;">
                         <p style="font-size: 13px; color: #94a3b8; text-align: left; line-height: 1.5; margin-bottom: 0;">
-                            1. Did you run <code>teams-org extract</code> to generate <strong>org_tree.json</strong>?<br>
+                            1. Did you run <code>teams-org extract</code> to generate <strong>org_graph.json</strong>?<br>
                             2. Are you serving this file via a local web server?<br>
                             <span style="color: #6366f1; font-family: monospace; display: block; margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.3); border-radius: 6px;">teams-org extract</span>
                         </p>

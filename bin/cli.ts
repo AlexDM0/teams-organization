@@ -109,26 +109,26 @@ async function runExtract(options: {
     }
 
     // Extract data from Microsoft Graph.
-    const { tree, photos } = await extractOrgData({
+    const { graph, photos } = await extractOrgData({
         clientId: tenantConfig.clientId,
         tenantId: tenantConfig.tenantId,
         photos: options.photos,
         deviceCode: options.deviceCode,
     });
 
-    // Write the readable tree and the separate photo map.
-    const treePath = path.join(folder, 'org_tree.json');
+    // Write the readable nodes-and-edges graph and the separate photo map.
+    const graphPath = path.join(folder, 'org_graph.json');
     const photosPath = path.join(folder, 'photos.json');
-    await Bun.write(treePath, JSON.stringify(tree, null, 2));
+    await Bun.write(graphPath, JSON.stringify(graph, null, 2));
     // Photos are opaque base64 blobs — write them compact (no pretty-print) to
     // roughly halve the file size and the transient string used to serialize it.
     await Bun.write(photosPath, JSON.stringify(photos));
-    console.log(`💾 Saved ${treePath}`);
+    console.log(`💾 Saved ${graphPath} (${graph.nodes.length} people, ${graph.edges.length} relationships)`);
     console.log(`💾 Saved ${photosPath} (${Object.keys(photos).length} photos)`);
 
     // Generate the fully portable, self-contained index.html.
     const template = await Bun.file(templatePath()).text();
-    const html = await generatePortableHtml(template, tree, photos, options.inline);
+    const html = await generatePortableHtml(template, graph, photos, options.inline);
     const htmlPath = path.join(folder, 'index.html');
     await Bun.write(htmlPath, html);
     console.log(`💾 Saved ${htmlPath}`);
@@ -140,16 +140,16 @@ async function runUpdate(options: { folder?: string; inline: boolean }) {
     const folder = path.resolve(options.folder ?? process.cwd());
     console.log(`📁 Folder: ${folder}\n`);
 
-    // Reuse the existing extraction data — the tree is required.
-    const treePath = path.join(folder, 'org_tree.json');
+    // Reuse the existing extraction data — the graph is required.
+    const graphPath = path.join(folder, 'org_graph.json');
     const photosPath = path.join(folder, 'photos.json');
-    const treeFile = Bun.file(treePath);
-    if (!(await treeFile.exists())) {
-        console.error(`❌ No org_tree.json found in ${folder}.`);
+    const graphFile = Bun.file(graphPath);
+    if (!(await graphFile.exists())) {
+        console.error(`❌ No org_graph.json found in ${folder}.`);
         console.error('   Run `teams-org extract` here first.');
         process.exit(1);
     }
-    const tree = JSON.parse(await treeFile.text());
+    const graph = JSON.parse(await graphFile.text());
 
     // photos.json is optional (e.g. extracted with --no-photos).
     const photosFile = Bun.file(photosPath);
@@ -160,11 +160,11 @@ async function runUpdate(options: { folder?: string; inline: boolean }) {
     } else {
         console.log('🖼️  No photos.json found — building without photos.');
     }
-    console.log(`🌳 Reusing ${treePath}\n`);
+    console.log(`🕸️  Reusing ${graphPath}\n`);
 
     // Rebake the portable HTML from the current template.
     const template = await Bun.file(templatePath()).text();
-    const html = await generatePortableHtml(template, tree, photos, options.inline);
+    const html = await generatePortableHtml(template, graph, photos, options.inline);
     const htmlPath = path.join(folder, 'index.html');
     await Bun.write(htmlPath, html);
     console.log(`💾 Saved ${htmlPath}`);
@@ -208,7 +208,7 @@ program
 
 program
     .command('update')
-    .description('Rebuild index.html from the existing org_tree.json / photos.json (no re-download).')
+    .description('Rebuild index.html from the existing org_graph.json / photos.json (no re-download).')
     .option('-f, --folder <path>', 'Folder containing the extraction (default: current directory)')
     .option('--no-inline', 'Keep CDN <script> links instead of inlining libraries')
     .action(async (options) => {

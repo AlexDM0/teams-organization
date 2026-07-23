@@ -19,9 +19,9 @@ export const DEFAULT_TENANT_ID = 'common';
 /** Microsoft Graph delegated permission the tool signs in with. */
 const GRAPH_SCOPES = ['User.Read.All'];
 
-export interface OrgNode {
+/** A single person in the organization graph. Relationships live in edges, not here. */
+export interface PersonNode {
     id: string;
-    parentId: string | null;
     name: string;
     position: string;
     email: string;
@@ -34,14 +34,32 @@ export interface OrgNode {
     country: string;
     companyName: string;
     employeeId: string;
-    children: OrgNode[];
 }
 
-/** Map of user id -> base64 data URL. Kept separate from the tree for readability. */
+/** The kind of relationship an edge represents. Currently only manager -> report. */
+export type EdgeType = 'IS_MANAGER_OF';
+
+/**
+ * A directed relationship between two people. For IS_MANAGER_OF, `from` is the
+ * manager and `to` is the report (manager IS_MANAGER_OF report).
+ */
+export interface Edge {
+    from: string;
+    to: string;
+    type: EdgeType;
+}
+
+/** The organization as a nodes-and-edges graph. Supersedes the old parentId tree. */
+export interface OrgGraph {
+    nodes: PersonNode[];
+    edges: Edge[];
+}
+
+/** Map of user id -> base64 data URL. Kept separate from the graph for readability. */
 export type PhotoMap = Record<string, string>;
 
 export interface OrgData {
-    tree: OrgNode[];
+    graph: OrgGraph;
     photos: PhotoMap;
 }
 
@@ -439,59 +457,66 @@ export async function fetchAllPhotos(graphClient: Client, users: any[]): Promise
     return photos;
 }
 
-export function buildTree(users: any[]): OrgNode[] {
-    const nodesByUserId = new Map<string, OrgNode>();
+/**
+ * Turns the raw Graph users into an organization graph: one PersonNode per user
+ * and one IS_MANAGER_OF edge (manager -> report) per known manager relationship.
+ *
+ * Edges to unknown managers (outside the fetched set) and self-management are
+ * skipped, and any edge that would close a management cycle is dropped, so the
+ * emitted graph stays a clean forest that the visualization can lay out.
+ */
+export function buildGraph(users: any[]): OrgGraph {
+    const nodes: PersonNode[] = users.map((user) => ({
+        id: user.id,
+        name: user.displayName || 'Unknown',
+        position: user.jobTitle || '',
+        email: user.mail || user.userPrincipalName || '',
+        role: user.department || user.officeLocation || '',
+        mobilePhone: user.mobilePhone || '',
+        businessPhone: (Array.isArray(user.businessPhones) ? user.businessPhones.filter(Boolean).join(', ') : '') || '',
+        officeLocation: user.officeLocation || '',
+        city: user.city || '',
+        state: user.state || '',
+        country: user.country || '',
+        companyName: user.companyName || '',
+        employeeId: user.employeeId || '',
+    }));
+
+    const knownUserIds = new Set(nodes.map((node) => node.id));
+    // Tracks each report's chosen manager as edges are added, so we can detect a
+    // cycle before committing an edge (each person has at most one manager).
+    const managerIdByReportId = new Map<string, string>();
+    const edges: Edge[] = [];
 
     for (const user of users) {
-        const managerId: string | null = user.manager?.id || null;
-        nodesByUserId.set(user.id, {
-            id: user.id,
-            // A user listed as their own manager would create a self-cycle; treat them as a root instead.
-            parentId: managerId && managerId !== user.id ? managerId : null,
-            name: user.displayName || 'Unknown',
-            position: user.jobTitle || '',
-            email: user.mail || user.userPrincipalName || '',
-            role: user.department || user.officeLocation || '',
-            mobilePhone: user.mobilePhone || '',
-            businessPhone: (Array.isArray(user.businessPhones) ? user.businessPhones.filter(Boolean).join(', ') : '') || '',
-            officeLocation: user.officeLocation || '',
-            city: user.city || '',
-            state: user.state || '',
-            country: user.country || '',
-            companyName: user.companyName || '',
-            employeeId: user.employeeId || '',
-            children: [],
-        });
+        const managerId: string | undefined = user.manager?.id;
+        // Skip missing/self/unknown managers, and any edge that would form a cycle.
+        if (!managerId || managerId === user.id || !knownUserIds.has(managerId)) continue;
+        if (wouldCloseManagerCycle(user.id, managerId, managerIdByReportId)) continue;
+        managerIdByReportId.set(user.id, managerId);
+        edges.push({ from: managerId, to: user.id, type: 'IS_MANAGER_OF' });
     }
 
-    const rootNodes: OrgNode[] = [];
-    for (const user of users) {
-        const node = nodesByUserId.get(user.id)!;
-        const parentNode = node.parentId ? nodesByUserId.get(node.parentId) : undefined;
-        if (parentNode && !createsManagerCycle(node, parentNode, nodesByUserId)) {
-            parentNode.children.push(node);
-        } else {
-            // No known manager, or attaching would form a cycle — treat as a root.
-            node.parentId = null;
-            rootNodes.push(node);
-        }
-    }
-    return rootNodes;
+    return { nodes, edges };
 }
 
 /**
- * Detects whether making `parentNode` the parent of `node` would form a cycle
- * (e.g. A manages B while B manages A) by walking up the manager chain and
- * checking whether we arrive back at `node`.
+ * Detects whether making `managerId` the manager of `reportId` would form a cycle
+ * (e.g. A manages B while B manages A) by walking up the existing manager chain
+ * and checking whether we arrive back at `reportId`.
  */
-function createsManagerCycle(node: OrgNode, parentNode: OrgNode, nodesByUserId: Map<string, OrgNode>): boolean {
-    let ancestor: OrgNode | undefined = parentNode;
+function wouldCloseManagerCycle(
+    reportId: string,
+    managerId: string,
+    managerIdByReportId: Map<string, string>,
+): boolean {
+    let ancestorId: string | undefined = managerId;
     const visitedIds = new Set<string>();
-    while (ancestor) {
-        if (ancestor.id === node.id) return true;
-        if (visitedIds.has(ancestor.id)) return true;
-        visitedIds.add(ancestor.id);
-        ancestor = ancestor.parentId ? nodesByUserId.get(ancestor.parentId) : undefined;
+    while (ancestorId) {
+        if (ancestorId === reportId) return true;
+        if (visitedIds.has(ancestorId)) return true;
+        visitedIds.add(ancestorId);
+        ancestorId = managerIdByReportId.get(ancestorId);
     }
     return false;
 }
@@ -518,7 +543,7 @@ export async function extractOrgData(options: ExtractOptions): Promise<OrgData> 
     console.log(`Fetched ${users.length} users.`);
 
     const photos = options.photos ? await fetchAllPhotos(graphClient, users) : {};
-    return { tree: buildTree(users), photos };
+    return { graph: buildGraph(users), photos };
 }
 
 /** Locates the bundled index.html template regardless of CWD. */
@@ -622,13 +647,13 @@ function replaceOrThrow(html: string, pattern: string | RegExp, replacement: str
 }
 
 /**
- * Builds a fully self-contained index.html: the org tree and photo map are each
+ * Builds a fully self-contained index.html: the org graph and photo map are each
  * embedded as JSON <script> tags and (when reachable and integrity-verified) the
  * CDN libraries are inlined so the file works offline from a plain file:// path.
  */
 export async function generatePortableHtml(
     template: string,
-    tree: OrgNode[],
+    graph: OrgGraph,
     photos: PhotoMap,
     inlineVendors = true
 ): Promise<string> {
@@ -656,7 +681,7 @@ export async function generatePortableHtml(
 
     // Escape the JSON so it can live safely inside a <script> tag.
     const encodeForScriptTag = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
-    const treeDataTag = `<script type="application/json" id="org-data-embedded">${encodeForScriptTag(tree)}</script>`;
+    const graphDataTag = `<script type="application/json" id="org-graph-embedded">${encodeForScriptTag(graph)}</script>`;
     const photosDataTag = `<script type="application/json" id="org-photos-embedded">${encodeForScriptTag(photos)}</script>`;
 
     // Inject the embedded data at the stable placeholder comment. A replacement
@@ -664,7 +689,7 @@ export async function generatePortableHtml(
     html = replaceOrThrow(
         html,
         DATA_PLACEHOLDER,
-        `${treeDataTag}\n    ${photosDataTag}`,
+        `${graphDataTag}\n    ${photosDataTag}`,
         'inject embedded org data'
     );
 

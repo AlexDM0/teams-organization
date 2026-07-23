@@ -18,17 +18,20 @@ It authenticates (interactive browser sign-in by default; `--device-code` for th
 device-code flow), downloads every user + their manager + profile photos, and
 writes three files into the chosen output folder:
 
-- `org_tree.json` — the readable hierarchy (**no image blobs**).
+- `org_graph.json` — the readable org graph `{ nodes, edges }` (**no image
+  blobs**). `nodes` are people; `edges` are typed relationships `{ from, to,
+  type }` (currently only `IS_MANAGER_OF`, where `from` is the manager and `to`
+  is the report). This supersedes the old nested `parentId`/`children` tree.
 - `photos.json` — a separate `{ userId: base64DataUrl }` map (kept out of the
-  tree so the tree stays human-readable).
-- `index.html` — a portable visualization with the tree, photos, and vendor
+  graph so the graph stays human-readable).
+- `index.html` — a portable visualization with the graph, photos, and vendor
   libraries embedded; open it directly via `file://`, no server needed.
 
 ## Project structure
 
 ```
 bin/cli.ts            CLI entry point (Commander). The package `bin` → teams-org.
-src/extractor.ts      Graph auth + fetching, tree building, portable-HTML generation.
+src/extractor.ts      Graph auth + fetching, graph building, portable-HTML generation.
 src/tenant.ts         tenant.json flow (default vs custom IDs) + custom_tenant_id.html guide.
 templates/index.html  The visualization template (D3 org chart + settings + overlay).
 setup.sh              Installer: checks Bun, runs `bun install`, `bun link`.
@@ -42,7 +45,7 @@ package.json          bin/scripts; deps: @azure/msal-node, @microsoft/microsoft-
 ./setup.sh                 # install deps + link `teams-org` onto PATH (macOS/Linux/Windows)
 bun run extract            # = bun run bin/cli.ts extract
 teams-org extract          # after linking
-teams-org update           # rebuild index.html from existing org_tree.json/photos.json (no re-download)
+teams-org update           # rebuild index.html from existing org_graph.json/photos.json (no re-download)
 teams-org extract --help   # all flags
 bunx tsc --noEmit          # type-check (the primary validation — there is no test suite yet)
 ```
@@ -66,8 +69,9 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
 3. `extractOrgData()` → `createAccessTokenProvider()` (interactive by default,
    MSAL device-code with `--device-code`; hands out silently-refreshed tokens so
    long runs survive token expiry) → `fetchAllUsers()` (Graph `/users` with
-   `$expand=manager`) → `fetchAllPhotos()` → `buildTree()` (which breaks any
-   manager cycles so the tree never recurses forever).
+   `$expand=manager`) → `fetchAllPhotos()` → `buildGraph()` (emits one PersonNode
+   per user and one `IS_MANAGER_OF` edge per known manager, dropping self/unknown
+   managers and any edge that would close a cycle, so the graph stays a forest).
    `fetchAllPhotos()` batches (10 at a time) and requests **120×120 thumbnails**
    (`/users/{id}/photos/120x120/$value`, falling back to full-res `/photo/$value`
    **only on a genuine 404**); throttling (429/503) is retried with backoff and
@@ -78,7 +82,7 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
    CDN `<script>` libs (downloads them and **verifies each against a pinned
    Subresource Integrity hash in `VENDOR_SCRIPTS`**, failing closed on a
    mismatch; falls back to the CDN link only when a download is unreachable), and
-   injects the tree + photos as `<script type="application/json">` tags at the
+   injects the graph + photos as `<script type="application/json">` tags at the
    stable `<!-- ORG_DATA_PLACEHOLDER -->` comment.
    **Every `html.replace()` here must use a replacement _function_** (`() =>
    ...`), never a replacement string — inlined library source and JSON contain
@@ -92,15 +96,18 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
 
 ### The template (`templates/index.html`)
 
-- Dual-mode data loading: uses embedded `#org-data-embedded` / `#org-photos-embedded`
-  JSON if present (portable build), otherwise `fetch()`es `org_tree.json` /
+- Dual-mode data loading: uses embedded `#org-graph-embedded` / `#org-photos-embedded`
+  JSON if present (portable build), otherwise `fetch()`es `org_graph.json` /
   `photos.json` (dev mode). Keep both paths working when editing the loader.
+- The loader reconstructs a flat `id`/`parentId` list from the graph's
+  `IS_MANAGER_OF` edges (d3-org-chart needs one parent per node); the rest of the
+  template works on that `peopleList` unchanged.
 - Photos are merged back onto nodes by id at render time (`photos[node.id]`).
 - Cogwheel (⚙️) settings panel lets the user pick **up to 3** fields to show per
   card (persisted in `localStorage`); clicking a card opens a contact overlay
   with all fields. Field definitions live in the `FIELD_DEFINITIONS` array — add
-  new profile fields there **and** in `src/extractor.ts` (`$select`, `OrgNode`,
-  `buildTree`). All name/position/field values are passed through `escapeHtml`
+  new profile fields there **and** in `src/extractor.ts` (`$select`, `PersonNode`,
+  `buildGraph`). All name/position/field values are passed through `escapeHtml`
   when rendered into card/search markup, so keep new interpolations escaped too.
 
 ## Conventions
@@ -108,13 +115,13 @@ CLI flags (`extract`): `--folder`, `--yes`, `--client-id`, `--tenant-id`,
 - **No config files or env vars for auth**: the public app registration is baked
   into the code (`DEFAULT_CLIENT_ID` / `DEFAULT_TENANT_ID` in `src/extractor.ts`).
   Override per-folder via `tenant.json` or the `--client-id`/`--tenant-id` flags.
-- **Keep the tree readable**: never inline base64 photos into `org_tree.json` —
+- **Keep the graph readable**: never inline base64 photos into `org_graph.json` —
   they belong in `photos.json` / the embedded photo map.
 - When embedding data in HTML, escape it for `<script>` context (`<` → `\u003c`)
   as `generatePortableHtml` does, and inject with a replacement **function**, not
   a string (see data-flow step 4 — protects against `$`-pattern corruption).
 - Adding a profile field is a two-place change: `src/extractor.ts` (query +
-  `OrgNode` + `buildTree`) and `templates/index.html` (`FIELD_DEFINITIONS`).
+  `PersonNode` + `buildGraph`) and `templates/index.html` (`FIELD_DEFINITIONS`).
 - After changing `bin`/scripts/paths, re-run `bun link` so the global `teams-org`
   shim points at the right file.
 
